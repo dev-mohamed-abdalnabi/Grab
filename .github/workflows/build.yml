@@ -15,11 +15,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Organize flat files into project folders
+        env:
+          GRAB_KEYSTORE_BASE64: ${{ secrets.GRAB_KEYSTORE_BASE64 }}
+          GRAB_STORE_PASSWORD: ${{ secrets.GRAB_STORE_PASSWORD }}
+          GRAB_KEY_ALIAS: ${{ secrets.GRAB_KEY_ALIAS }}
+          GRAB_KEY_PASSWORD: ${{ secrets.GRAB_KEY_PASSWORD }}
         run: |
           mkdir -p app/src/main/java/app/grab app/src/main/res/values app/src/main/res/drawable-xxxhdpi app/src/main/res/mipmap-anydpi
           cp app-build.gradle.kts app/build.gradle.kts
           cp proguard-rules.pro app/proguard-rules.pro
-          cp grab.jks app/grab.jks
+          test -n "$GRAB_KEYSTORE_BASE64"
+          printf '%s' "$GRAB_KEYSTORE_BASE64" | base64 -d > app/grab.jks
           cp AndroidManifest.xml app/src/main/AndroidManifest.xml
           cp Engine.kt MainActivity.kt ShareActivity.kt LoginActivity.kt PlayerActivity.kt UI.kt app/src/main/java/app/grab/
           cp themes.xml colors.xml app/src/main/res/values/

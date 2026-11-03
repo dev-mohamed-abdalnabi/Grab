@@ -23,9 +23,9 @@ android {
     signingConfigs {
         create("grab") {
             storeFile = file("grab.jks")
-            storePassword = "***REMOVED_SIGNING_SECRET***"
-            keyAlias = "grab"
-            keyPassword = "***REMOVED_SIGNING_SECRET***"
+            storePassword = System.getenv("GRAB_STORE_PASSWORD") ?: error("GRAB_STORE_PASSWORD is required for release builds")
+            keyAlias = System.getenv("GRAB_KEY_ALIAS") ?: error("GRAB_KEY_ALIAS is required for release builds")
+            keyPassword = System.getenv("GRAB_KEY_PASSWORD") ?: error("GRAB_KEY_PASSWORD is required for release builds")
         }
     }
     buildTypes {
