@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -1385,14 +1386,6 @@ fun SettingsScreen(bottom: Dp) {
         confirmButton = { TextButton({ howDialog = false }) { Text("تمام") } }
     )
 }
-
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathParser
-import androidx.compose.ui.unit.dp
 
 // مجموعة أيقونات خطّية حديثة (24×24، حواف دايرية) مرسومة من مسارات SVG، فمفيش مكتبة أيقونات إضافية
 private fun icon(name: String, vararg paths: String): ImageVector =
