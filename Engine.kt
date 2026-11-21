@@ -17,7 +17,6 @@ import androidx.compose.runtime.*
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
-import com.yausername.youtubedl_android.mapper.VideoInfo
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -65,6 +64,27 @@ class Hist(val url: String, val title: String, val thumb: String?)
 class PlEntry(val url: String, val title: String, val thumb: String?, val dur: Int)
 class PlInfo(val title: String, val entries: List<PlEntry>)
 
+// حجم جودة معيّنة (فيديو + صوت). approx = تقدير مش رقم دقيق من الموقع
+class QOpt(val h: Int, val bytes: Long, val approx: Boolean)
+class Info(
+    val title: String?, val thumbnail: String?, val uploader: String?, val duration: Int,
+    val qs: List<QOpt>, val audioBytes: Long, val audioApprox: Boolean
+) {
+    // حجم الصوت المتوقع حسب الصيغة (mp3 بيتحوّل فبنقدّره من المدة)
+    fun audioEst(fmt: String): Pair<Long, Boolean> =
+        if (fmt == "mp3" && duration > 0) (duration * 23_750L) to true else audioBytes to audioApprox
+}
+
+class CookieSite(val domain: String, val count: Int)
+
+// الدومين الأساسي (m.facebook.com → facebook.com ، x.co.uk → x.co.uk)
+fun baseDomain(host: String): String {
+    val p = host.lowercase().removePrefix("www.").split(".").filter { it.isNotEmpty() }
+    if (p.size <= 2) return p.joinToString(".")
+    val second = setOf("co", "com", "org", "net", "gov", "edu", "ac")
+    return if (p[p.size - 2] in second && p.last().length == 2) p.takeLast(3).joinToString(".") else p.takeLast(2).joinToString(".")
+}
+
 object Incoming {
     val v = MutableStateFlow<String?>(null)
     val clip = MutableStateFlow<String?>(null)   // رابط منسوخ في الكليبورد
@@ -77,7 +97,7 @@ object Prefs {
     var concurrent by mutableIntStateOf(2)
     var audioFmt by mutableStateOf("m4a")
     var limit by mutableIntStateOf(0)          // حد السرعة MB/s (0 = بدون)
-    var subsMode by mutableIntStateOf(0)       // 0 تضمين، 1 ملف منفصل
+    var subsMode by mutableIntStateOf(0)       // 0 تضمين، 1 ملف منفصل، 2 الاتنين، 3 ترجمة فقط (من غير فيديو)
     var organize by mutableIntStateOf(0)       // 0 عادي، 1 حسب الموقع، 2 حسب القناة
     var folder by mutableStateOf("Grab")
     var saveThumb by mutableStateOf(false)
@@ -92,6 +112,10 @@ object Prefs {
     var schedTo by mutableIntStateOf(7)
     var chargingOnly by mutableStateOf(false)
     var theme by mutableIntStateOf(0)         // 0 النظام، 1 فاتح، 2 داكن
+    var thumbMode by mutableIntStateOf(0)     // 0 بدون، 1 صورة فقط، 2 مدمجة في الفيديو، 3 ملف منفصل، 4 مدمجة + منفصلة
+    var dubMode by mutableIntStateOf(0)       // 0 الصوت الأصلي، 1 لغة مفضلة، 2 كل الأصوات في ملف MKV
+    var dubLang by mutableStateOf("ar")
+    var firstRun by mutableStateOf(true)      // شرح الاستخدام بيظهر أول فتح بس
     var accent by mutableIntStateOf(0)        // 0 لون الخلفية، 1 أزرق، 2 أخضر، 3 بنفسجي، 4 برتقالي، 5 وردي
 
     fun load(c: Context) {
@@ -103,6 +127,9 @@ object Prefs {
         treeUri = sp.getString("tu", "") ?: ""
         schedOn = sp.getBoolean("so", false); schedFrom = sp.getInt("sfr", 1); schedTo = sp.getInt("sto", 7)
         chargingOnly = sp.getBoolean("co", false); theme = sp.getInt("tm", 0); accent = sp.getInt("ac", 0)
+        firstRun = sp.getBoolean("fr", true)
+        thumbMode = sp.getInt("tmo", if (sp.getBoolean("th", false)) 3 else 0)
+        dubMode = sp.getInt("dm", 0); dubLang = sp.getString("dl", "ar") ?: "ar"
         limit = sp.getInt("l", 0); subsMode = sp.getInt("sm", 0); organize = sp.getInt("o", 0)
         folder = sp.getString("f", "Grab") ?: "Grab"; saveThumb = sp.getBoolean("th", false); saveDesc = sp.getBoolean("de", false)
     }
@@ -121,7 +148,7 @@ object Prefs {
             .putBoolean("th", saveThumb).putBoolean("de", saveDesc)
             .putInt("nt", nameTpl).putBoolean("em", embedMeta).putString("sl", subLangs).putString("tu", treeUri)
             .putBoolean("so", schedOn).putInt("sfr", schedFrom).putInt("sto", schedTo).putBoolean("co", chargingOnly)
-            .putInt("tm", theme).putInt("ac", accent).apply()
+            .putInt("tm", theme).putInt("ac", accent).putBoolean("fr", firstRun).putInt("tmo", thumbMode).putInt("dm", dubMode).putString("dl", dubLang).apply()
     }
 }
 
@@ -132,6 +159,7 @@ object Repo {
     val ready = mutableStateOf(false)
     val status = mutableStateOf("")
     val hasCookies = mutableStateOf(false)
+    val cookieSites = mutableStateListOf<CookieSite>()
     val history = mutableStateListOf<Hist>()
     lateinit var app: Context
     // عدد التحميلات المتزامنة بيتقرأ من الإعدادات في كل مرة، فالتغيير بيتطبّق فورًا
@@ -150,7 +178,7 @@ object Repo {
         loadLib()
         loadTasks()
         loadHist()
-        hasCookies.value = cookieFile.exists() && cookieFile.length() > 0
+        refreshCookies()
         try {
             val nm = app.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(NotificationChannel("dl", "التحميل", NotificationManager.IMPORTANCE_LOW))
@@ -182,14 +210,17 @@ object Repo {
         val m = e.message ?: e.javaClass.simpleName
         return when {
             m.contains("not a bot", true) || m.contains("Sign in to confirm", true) ->
-                "يوتيوب طلب تأكيد إنك مش بوت. قفّل الـ VPN أو استورد ملف الكوكيز من الإعدادات."
+                "يوتيوب طلب تأكيد إنك مش بوت. قفّل الـ VPN أو سجّل دخول من «المتصفح الصغير» في الإعدادات."
             m.contains("Unable to resolve host", true) || m.contains("timed out", true) || m.contains("Network is unreachable", true) ->
                 "مشكلة في الاتصال بالنت"
             m.contains("403") || m.contains("Forbidden", true) ->
                 "يوتيوب رفض التحميل (403). من الإعدادات اضغط «تحديث الآن» وجرّب تاني."
             m.contains("Private video", true) -> "الفيديو خاص"
             m.contains("Video unavailable", true) -> "الفيديو مش متاح"
-            m.contains("age", true) && m.contains("confirm", true) -> "الفيديو مقيّد بالعمر، محتاج كوكيز"
+            m.contains("age", true) && m.contains("confirm", true) -> "الفيديو مقيّد بالعمر، سجّل دخول من «المتصفح الصغير» في الإعدادات"
+            m.contains("--cookies", true) || m.contains("need to log in", true) || m.contains("login required", true) ||
+                m.contains("requires authentication", true) ->
+                "الموقع ده محتاج تسجيل دخول — افتح «المتصفح الصغير» من الإعدادات وسجّل دخول وبعدين جرّب تاني"
             else -> m.lines().lastOrNull { it.isNotBlank() }?.take(160) ?: "error"
         }
     }
@@ -209,35 +240,76 @@ object Repo {
         } catch (e: Throwable) { status.value = "فشل التحديث: " + clean(e) }
     }
 
-    // ───── الكوكيز ─────
+    // ───── الكوكيز (أي موقع) ─────
+    // ملف واحد cookies.txt بصيغة Netscape فيه كوكيز كل المواقع، وyt-dlp بيختار منه اللي يناسب كل رابط
+    private fun isCookieLine(l: String) =
+        l.isNotBlank() && (!l.startsWith("#") || l.startsWith("#HttpOnly_")) && l.count { it == '\t' } >= 6
+    private fun lineDomain(l: String) = l.removePrefix("#HttpOnly_").substringBefore('\t').trimStart('.').lowercase()
+    private fun cookieLines(): List<String> = try {
+        if (cookieFile.exists()) cookieFile.readLines().map { it.trimEnd('\r') }.filter { isCookieLine(it) } else emptyList()
+    } catch (_: Throwable) { emptyList() }
+
+    fun refreshCookies() {
+        val groups = cookieLines().groupingBy { baseDomain(lineDomain(it)) }.eachCount()
+        cookieSites.clear()
+        groups.entries.sortedBy { it.key }.forEach { cookieSites.add(CookieSite(it.key, it.value)) }
+        hasCookies.value = groups.isNotEmpty()
+    }
+
+    // بيضيف كوكيز جديدة، وبيستبدل القديمة لنفس الموقع (من غير ما يمسّ باقي المواقع)
+    private fun mergeCookies(add: List<String>) {
+        val doms = add.map { baseDomain(lineDomain(it)) }.toSet()
+        val keep = cookieLines().filter { baseDomain(lineDomain(it)) !in doms }
+        cookieFile.writeText("# Netscape HTTP Cookie File\n" + (keep + add).joinToString("\n") + "\n")
+        refreshCookies()
+    }
+
     fun importCookies(uri: Uri): Boolean = try {
         val txt = app.contentResolver.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) }
-        val valid = txt.lines().any { l -> !l.startsWith("#") && l.count { it == '\t' } >= 6 }
-        if (!valid) false else {
-            val head = txt.trimStart()
-            val body = if (head.startsWith("# Netscape") || head.startsWith("# HTTP Cookie")) txt else "# Netscape HTTP Cookie File\n$txt"
-            cookieFile.writeText(body); hasCookies.value = true; true
-        }
+        val lines = txt.lines().map { it.trimEnd('\r') }.filter { isCookieLine(it) }
+        if (lines.isEmpty()) false else { mergeCookies(lines); true }
     } catch (_: Throwable) { false }
 
-    // تسجيل الدخول من جوه التطبيق: بناخد الكوكيز من الـ WebView ونكتبها بصيغة Netscape
-    fun saveWebCookies(): Boolean = try {
+    // مواقع بتسجّل دخول عن طريق دومين تاني (يوتيوب ← جوجل…)
+    private fun related(base: String): List<Pair<String, String>> = when (base) {
+        "youtube.com" -> listOf("https://accounts.google.com/" to "google.com", "https://www.google.com/" to "google.com",
+            "https://accounts.youtube.com/" to "youtube.com")
+        "google.com" -> listOf("https://www.youtube.com/" to "youtube.com", "https://accounts.google.com/" to "google.com")
+        "x.com", "twitter.com" -> listOf("https://x.com/" to "x.com", "https://twitter.com/" to "twitter.com")
+        "facebook.com" -> listOf("https://m.facebook.com/" to "facebook.com", "https://www.facebook.com/" to "facebook.com")
+        else -> emptyList()
+    }
+
+    // بناخد كوكيز الموقع اللي مفتوح في المتصفح الصغير ونكتبها بصيغة Netscape.
+    // بترجّع (الدومين، عدد الكوكيز) أو null لو مفيش كوكيز
+    fun saveWebCookies(pageUrl: String): Pair<String, Int>? = try {
+        val host = Uri.parse(pageUrl).host ?: throw Exception("no host")
+        val base = baseDomain(host)
         val cm = android.webkit.CookieManager.getInstance()
         cm.flush()
-        val sb = StringBuilder("# Netscape HTTP Cookie File\n")
-        var n = 0
-        listOf("https://www.youtube.com" to ".youtube.com", "https://accounts.google.com" to ".google.com",
-            "https://www.google.com" to ".google.com").forEach { (u, d) ->
+        val jar = linkedMapOf<String, LinkedHashMap<String, String>>()   // دومين ← (اسم الكوكي ← القيمة)
+        fun grab(u: String, dom: String) {
             cm.getCookie(u)?.split(";")?.forEach { c ->
                 val kv = c.trim(); val i = kv.indexOf('=')
-                if (i > 0) { sb.append("$d\tTRUE\t/\tTRUE\t2147483647\t${kv.substring(0, i)}\t${kv.substring(i + 1)}\n"); n++ }
+                if (i > 0) { jar.getOrPut(dom) { linkedMapOf() }[kv.substring(0, i)] = kv.substring(i + 1) }
             }
         }
-        if (n == 0 || !sb.contains("\tSID\t")) false
-        else { cookieFile.writeText(sb.toString()); hasCookies.value = true; true }
-    } catch (_: Throwable) { false }
+        grab(pageUrl, base); grab("https://$base/", base); grab("https://www.$base/", base)
+        related(base).forEach { (u, d) -> grab(u, d) }
+        val lines = jar.flatMap { (d, m) -> m.map { (k, v) -> ".$d\tTRUE\t/\tTRUE\t2147483647\t$k\t$v" } }
+        if (lines.isEmpty()) null else { mergeCookies(lines); base to lines.size }
+    } catch (_: Throwable) { null }
 
-    fun clearCookies() { try { cookieFile.delete() } catch (_: Throwable) {}; hasCookies.value = false }
+    fun deleteCookies(domain: String) {
+        try {
+            val keep = cookieLines().filter { baseDomain(lineDomain(it)) != domain }
+            if (keep.isEmpty()) cookieFile.delete()
+            else cookieFile.writeText("# Netscape HTTP Cookie File\n" + keep.joinToString("\n") + "\n")
+        } catch (_: Throwable) {}
+        refreshCookies()
+    }
+
+    fun clearCookies() { try { cookieFile.delete() } catch (_: Throwable) {}; refreshCookies() }
 
     // ───── استراتيجيات يوتيوب: بنجرّب واحدة ورا التانية لحد ما واحدة تنجح ─────
     private val ytArgs = listOf<String?>(
@@ -250,7 +322,9 @@ object Repo {
     )
     // ترتيب المحاولات: لو فيه كوكيز نبدأ بالعملاء اللي بيدعموها
     private fun order(url: String): List<Int> =
-        if (!isYt(url)) listOf(0, 1) else if (hasCookies.value) listOf(2, 3, 4, 1, 0, 5) else listOf(0, 1, 2, 3, 4, 5)
+        if (!isYt(url)) listOf(0, 1)
+        else if (cookieSites.any { it.domain == "youtube.com" || it.domain == "google.com" }) listOf(2, 3, 4, 1, 0, 5)
+        else listOf(0, 1, 2, 3, 4, 5)
 
     // أخطاء مفيش فايدة من تكرارها
     private fun fatal(e: Throwable): Boolean {
@@ -280,18 +354,88 @@ object Repo {
         if (hasCookies.value && cookieFile.exists()) r.addOption("--cookies", cookieFile.absolutePath)
     }
 
-    suspend fun fetch(url: String): VideoInfo = withContext(Dispatchers.IO) {
+    private val infoDir get() = File(app.cacheDir, "info").apply { mkdirs() }
+    private fun infoFile(url: String) = File(infoDir, key(url).hashCode().toString() + ".json")
+    private fun cacheInfo(url: String, json: String) {
+        try {
+            infoDir.listFiles()?.sortedBy { it.lastModified() }?.dropLast(5)?.forEach { it.delete() }
+            infoFile(url).writeText(json)
+        } catch (_: Throwable) {}
+    }
+
+    // المعاينة: بنجرّب طريقتين في نفس الوقت (أول واحدة تنجح تكسب) وبنحفظ النتيجة عشان التحميل يبدأ فورًا
+    suspend fun fetch(url: String): Info = withContext(Dispatchers.IO) {
         ensureEngine()
-        var last: Throwable? = null
-        val tries = order(url).take(if (isYt(url)) 3 else 2)   // المعاينة لازم تكون سريعة
-        for (i in tries) {
-            try {
-                return@withContext YoutubeDL.getInstance().getInfo(
-                    YoutubeDLRequest(url).apply { addOption("--no-playlist"); addOption("--no-warnings"); common(this, i, url) })
-            } catch (e: CancellationException) { throw e
-            } catch (e: Throwable) { last = e; delay(300) }
+        val tries = if (isYt(url)) order(url).take(2) else listOf(0)
+        val tag = "pv${System.nanoTime()}"
+        coroutineScope {
+            val res = CompletableDeferred<Info>()
+            var last: Throwable? = null
+            val jobs = tries.map { i ->
+                launch {
+                    try {
+                        val r = YoutubeDLRequest(url).apply {
+                            addOption("--no-playlist"); addOption("--no-warnings"); addOption("--dump-single-json")
+                            common(this, i, url); addOption("--retries", "1"); addOption("--extractor-retries", "1")
+                        }
+                        val out = YoutubeDL.getInstance().execute(r, "${tag}_$i").out
+                        val info = parseInfo(JSONObject(out))
+                        cacheInfo(url, out); res.complete(info)
+                    } catch (e: CancellationException) { throw e
+                    } catch (e: Throwable) { last = e }
+                }
+            }
+            launch { jobs.joinAll(); if (!res.isCompleted) res.completeExceptionally(last ?: Exception("error")) }
+            try { res.await() } finally {
+                tries.forEach { try { YoutubeDL.getInstance().destroyProcessById("${tag}_$it") } catch (_: Throwable) {} }
+            }
         }
-        throw last ?: Exception("error")
+    }
+
+    private fun JSONObject.s(k: String): String = if (isNull(k)) "" else optString(k)
+    private fun JSONObject.n(k: String): Double = if (isNull(k)) 0.0 else optDouble(k, 0.0)
+    private fun codecRank(v: String) = when {
+        v.startsWith("av01") -> 4; v.startsWith("vp9") || v.startsWith("vp09") -> 3
+        v.startsWith("hev") || v.startsWith("hvc") -> 2; v.startsWith("avc") -> 1; else -> 0
+    }
+
+    // الحجم الحقيقي لكل جودة = أحسن فيديو بالجودة دي (اللي yt-dlp هيختاره فعلًا) + أحسن صوت.
+    // لو الموقع مادّيش الحجم بنقدّره من معدل البت × المدة
+    private fun parseInfo(j: JSONObject): Info {
+        val dur = j.n("duration")
+        fun size(f: JSONObject): Pair<Long, Boolean> {
+            val exact = f.n("filesize"); if (exact > 0) return exact.toLong() to false
+            val ap = f.n("filesize_approx"); if (ap > 0) return ap.toLong() to true
+            val tbr = f.n("tbr"); if (tbr > 0 && dur > 0) return (tbr * 125.0 * dur).toLong() to true
+            return 0L to true
+        }
+        val arr = j.optJSONArray("formats")
+        val all = (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optJSONObject(it) }.filter { it.s("ext") != "mhtml" }
+        val vids = all.filter { it.s("vcodec") != "none" && it.n("height") > 0 }
+        val audios = all.filter { it.s("vcodec") == "none" && it.s("acodec").let { a -> a.isNotEmpty() && a != "none" } }
+        val aud = audios.sortedWith(compareBy<JSONObject>(
+            { if (it.s("ext") == "m4a") 1 else 0 },
+            { val a = it.n("abr"); if (a > 0) a else it.n("tbr") }
+        )).lastOrNull()
+        val audSize = aud?.let { size(it) } ?: (0L to false)
+
+        val qs = vids.groupBy { f ->
+            val h = f.n("height").toInt(); val w = f.n("width").toInt()
+            val short = if (w > 0) minOf(w, h) else h
+            LADDER.lastOrNull { it <= short * 1.08 } ?: LADDER.first()
+        }.map { (q, fl) ->
+            val best = fl.sortedWith(compareBy<JSONObject>(
+                { if (it.s("ext") == "mp4") 1 else 0 }, { it.n("fps") }, { codecRank(it.s("vcodec")) }, { it.n("tbr") }
+            )).last()
+            val v = size(best)
+            var bytes = v.first; var ap = v.second
+            if (bytes > 0 && best.s("acodec") == "none" && aud != null) { bytes += audSize.first; ap = ap || audSize.second }
+            QOpt(q, bytes, ap)
+        }.sortedByDescending { it.h }.take(7)
+
+        val uploader = j.s("uploader").ifEmpty { j.s("channel") }
+        return Info(j.s("title").ifEmpty { null }, j.s("thumbnail").ifEmpty { null }, uploader.ifEmpty { null },
+            dur.toInt(), qs, audSize.first, audSize.second)
     }
 
     private val slotWait = mutableListOf<Task>()
@@ -494,13 +638,16 @@ object Repo {
             }
             val plan = order(t.url).toMutableList()
             var idx = 0; var updated = updatedThisSession; var last: Throwable? = null; var ok = false; var netTries = 0
-            var useSubs = t.subs && Prefs.subsMode == 0
+            val tm = Prefs.thumbMode; val sm = Prefs.subsMode
+            val skipVideo = tm == 1 || (!t.audio && t.subs && sm == 3)   // صورة فقط / ترجمة فقط: من غير تحميل الفيديو
+            var useSubs = t.subs && !t.audio && !skipVideo && (sm == 0 || sm == 2)
+            var useInfo = !t.playlist && !skipVideo
             var curH = t.height; var round2 = false; var okS = plan.first()
             while (idx < plan.size) {
                 val s = plan[idx++]
                 if (t.st == St.Canceled) return
                 t.msg = if (idx > 1) "بجرّب طريقة تانية ($idx/${plan.size})…" else ""
-                try { attempt(t, dir, s, useSubs, curH); ok = true; okS = s; break }
+                try { if (skipVideo) extrasOnly(t, dir, s) else attempt(t, dir, s, useSubs, curH, useInfo); ok = true; okS = s; break }
                 catch (e: CancellationException) { throw e }
                 catch (e: Throwable) {
                     if (t.st == St.Canceled) return
@@ -510,6 +657,7 @@ object Repo {
                     when {
                         fatal(e) -> break
                         // فشل الترجمة (429 غالبًا) ما يوقّفش التحميل: نكمّل من غيرها
+                        useInfo && !netErr(e) -> { useInfo = false; t.msg = ""; plan.add(idx, s) }   // المعلومات المحفوظة مشتغلتش: نستخرج من جديد
                         useSubs && subErr(e) -> { useSubs = false; t.msg = "الترجمة مش متاحة، بحمّل من غيرها…"; plan.add(idx, s); delay(500) }
                         curH > 0 && (e.message ?: "").contains("format is not available", true) ->
                             { curH = lowerQ(curH); t.msg = "الجودة مش متاحة، بجرّب أقل…"; plan.add(idx, s) }
@@ -533,11 +681,11 @@ object Repo {
             }
             if (!ok) throw last ?: Exception("فشل التحميل")
             // الترجمة كملف منفصل: خطوة بعد الفيديو، وفشلها ما يأثرش على التحميل
-            if (t.subs && Prefs.subsMode == 1 && !t.audio) {
+            if (!skipVideo && t.subs && !t.audio && (sm == 1 || sm == 2)) {
                 t.msg = "بجيب الترجمة…"
                 try { subsOnly(t, dir, okS) } catch (e: CancellationException) { throw e } catch (_: Throwable) {}
             }
-            finish(t, dir)
+            if (skipVideo) finishExtras(t, dir) else finish(t, dir)
         } catch (e: CancellationException) {
             if (t.st != St.Canceled) { t.st = St.Failed; t.msg = "اتوقف" }
         } catch (e: Throwable) {
@@ -553,8 +701,10 @@ object Repo {
         }
     }
 
-    private fun attempt(t: Task, dir: File, strat: Int, withSubs: Boolean, height: Int) {
+    private fun attempt(t: Task, dir: File, strat: Int, withSubs: Boolean, height: Int, useInfo: Boolean) {
         val r = YoutubeDLRequest(t.url)
+        if (useInfo) infoFile(t.url).takeIf { it.exists() && System.currentTimeMillis() - it.lastModified() < 2_700_000L }
+            ?.let { r.addOption("--load-info-json", it.absolutePath) }
         r.addOption("-o", "${dir.absolutePath}/${nameTpl()}.%(ext)s")
         r.addOption("--no-mtime"); r.addOption("--continue"); common(r, strat, t.url)
         if (Prefs.embedMeta) {
@@ -564,19 +714,25 @@ object Repo {
         if (Prefs.limit > 0) r.addOption("--limit-rate", "${Prefs.limit}M")
         r.addOption("--concurrent-fragments", "8")
         r.addOption(if (t.playlist) "--yes-playlist" else "--no-playlist")
-        if (Prefs.saveThumb) { r.addOption("--write-thumbnail"); r.addOption("--convert-thumbnails", "jpg") }
+        val tm = Prefs.thumbMode
+        if (!t.audio && (tm == 2 || tm == 4)) { r.addOption("--embed-thumbnail"); r.addOption("--convert-thumbnails", "jpg") }
+        if (tm == 3 || tm == 4) { r.addOption("--write-thumbnail"); r.addOption("--convert-thumbnails", "jpg") }
         if (Prefs.saveDesc) r.addOption("--write-description")
         if (!t.playlist && (t.clipStart.isNotBlank() || t.clipEnd.isNotBlank()))
             r.addOption("--download-sections", "*${t.clipStart.ifBlank { "0" }}-${t.clipEnd.ifBlank { "inf" }}")
         if (t.audio) {
             // m4a: بيتحمّل جاهز من غير إعادة ترميز (أسرع بكتير من mp3 على الموبايل)
             r.addOption("-f", if (Prefs.audioFmt == "m4a") "ba[ext=m4a]/ba/b" else "ba/b")
+            if (Prefs.dubMode == 1) r.addOption("-S", "lang:${Prefs.dubLang}")
             r.addOption("-x"); r.addOption("--audio-format", Prefs.audioFmt)
             if (Prefs.audioFmt == "mp3") r.addOption("--audio-quality", "2")
         } else {
-            r.addOption("-f", "bv*+ba/b")
-            r.addOption("-S", if (height > 0) "res:$height,ext:mp4:m4a" else "ext:mp4:m4a")
-            r.addOption("--merge-output-format", "mp4")
+            val allAudio = Prefs.dubMode == 2
+            if (allAudio) { r.addOption("-f", "bv*+mergeall[vcodec=none]/bv*+ba/b"); r.addOption("--audio-multistreams") }
+            else r.addOption("-f", "bv*+ba/b")
+            val lang = if (Prefs.dubMode == 1) "lang:${Prefs.dubLang}," else ""
+            r.addOption("-S", lang + if (height > 0) "res:$height,ext:mp4:m4a" else "ext:mp4:m4a")
+            r.addOption("--merge-output-format", if (allAudio) "mkv" else "mp4")
             if (withSubs) {
                 r.addOption("--write-subs"); r.addOption("--write-auto-subs")
                 r.addOption("--sub-langs", Prefs.subLangs); r.addOption("--embed-subs")
@@ -585,6 +741,7 @@ object Repo {
         YoutubeDL.getInstance().execute(r, t.id, callback = { p, eta, _ ->
             if (p >= 0f) t.progress = (p / 100f).coerceIn(0f, 1f)
             t.eta = eta
+            if (p >= 99.5f) t.msg = "جاري الدمج والحفظ…"
         })
     }
 
@@ -594,6 +751,34 @@ object Repo {
         2 -> "%(upload_date>%Y-%m-%d&{} - |)s%(title).80s"
         3 -> "%(title).80s [%(id)s]"
         else -> "%(title).80s"
+    }
+
+    // صورة فقط و/أو ترجمة فقط، من غير تحميل الفيديو
+    private fun extrasOnly(t: Task, dir: File, strat: Int) {
+        val r = YoutubeDLRequest(t.url)
+        r.addOption("-o", "${dir.absolutePath}/${nameTpl()}.%(ext)s")
+        r.addOption("--skip-download"); common(r, strat, t.url)
+        r.addOption(if (t.playlist) "--yes-playlist" else "--no-playlist")
+        if (Prefs.thumbMode == 1 || Prefs.thumbMode == 3 || Prefs.thumbMode == 4) {
+            r.addOption("--write-thumbnail"); r.addOption("--convert-thumbnails", "jpg")
+        }
+        if (t.subs) {
+            r.addOption("--write-subs"); r.addOption("--write-auto-subs")
+            r.addOption("--sub-langs", Prefs.subLangs); r.addOption("--convert-subs", "srt")
+            r.addOption("--sleep-subtitles", "2")
+        }
+        if (Prefs.saveDesc) r.addOption("--write-description")
+        YoutubeDL.getInstance().execute(r, t.id)
+    }
+
+    private fun finishExtras(t: Task, dir: File) {
+        val extras = dir.walkTopDown().filter { it.isFile && (it.extension.lowercase() in imgExt || it.extension.lowercase() in txtExt) }.toList()
+        if (extras.isEmpty()) throw Exception("ما اتنتجش ملف")
+        val sub = subFolder(t)
+        extras.forEach { try { save(it, sub) } catch (_: Throwable) {} }
+        t.progress = 1f; t.st = St.Done
+        notifyDone(t)
+        tasks.remove(t)
     }
 
     private fun subsOnly(t: Task, dir: File, strat: Int) {
@@ -673,7 +858,7 @@ object Repo {
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val u = app.contentResolver.insert(col, cv) ?: return null
-        app.contentResolver.openOutputStream(u)!!.use { o -> f.inputStream().use { it.copyTo(o) } }
+        app.contentResolver.openOutputStream(u)!!.use { o -> f.inputStream().use { it.copyTo(o, 1 shl 20) } }
         cv.clear(); cv.put(MediaStore.MediaColumns.IS_PENDING, 0)
         app.contentResolver.update(u, cv, null, null)
         return u.toString()
@@ -713,7 +898,7 @@ object Repo {
         val dirId = ensureDir(tree, sub.split("/").drop(1).filter { it.isNotBlank() })
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, dirId)
         val u = DocumentsContract.createDocument(app.contentResolver, parent, mime, name) ?: return null
-        app.contentResolver.openOutputStream(u)!!.use { o -> f.inputStream().use { it.copyTo(o) } }
+        app.contentResolver.openOutputStream(u)!!.use { o -> f.inputStream().use { it.copyTo(o, 1 shl 20) } }
         return u.toString()
     }
 

@@ -57,22 +57,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -118,7 +102,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.yausername.youtubedl_android.mapper.VideoInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -223,55 +206,17 @@ fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = cs, typography = AppType, content = content)
 }
 
-// ═══════════════════════════ الأيقونات المرسومة ═══════════════════════════
+// ═══════════════════════════ الأيقونات ═══════════════════════════
+// المجموعة كلها في Icons.kt (object Ico)
 
-private fun vec(name: String, b: PathBuilder.() -> Unit): ImageVector =
-    ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
-        path(stroke = SolidColor(Color.Black), strokeLineWidth = 2.2f, strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round, pathBuilder = b)
-    }.build()
-
-private val IcDownload by lazy { vec("download") {
-    moveTo(12f, 4f); lineTo(12f, 15f)
-    moveTo(7f, 10.5f); lineTo(12f, 15.5f); lineTo(17f, 10.5f)
-    moveTo(5f, 20f); lineTo(19f, 20f)
-} }
-private val IcLink by lazy { vec("link") {
-    moveTo(10f, 7f); horizontalLineTo(7f); arcTo(5f, 5f, 0f, false, false, 7f, 17f); horizontalLineTo(10f)
-    moveTo(14f, 7f); horizontalLineTo(17f); arcTo(5f, 5f, 0f, false, true, 17f, 17f); horizontalLineTo(14f)
-    moveTo(8f, 12f); horizontalLineTo(16f)
-} }
-private val IcWifi by lazy { vec("wifi") {
-    moveTo(3f, 9.5f); quadTo(12f, 1f, 21f, 9.5f)
-    moveTo(6f, 13f); quadTo(12f, 7f, 18f, 13f)
-    moveTo(9f, 16.5f); quadTo(12f, 13.5f, 15f, 16.5f)
-    moveTo(12f, 20f); lineTo(12.01f, 20f)
-} }
-private val IcSubs by lazy { vec("subs") {
-    moveTo(5f, 5f); horizontalLineTo(19f); arcTo(2f, 2f, 0f, false, true, 21f, 7f); verticalLineTo(17f)
-    arcTo(2f, 2f, 0f, false, true, 19f, 19f); horizontalLineTo(5f); arcTo(2f, 2f, 0f, false, true, 3f, 17f)
-    verticalLineTo(7f); arcTo(2f, 2f, 0f, false, true, 5f, 5f)
-    moveTo(7f, 11f); horizontalLineTo(10.5f); moveTo(13f, 11f); horizontalLineTo(17f)
-    moveTo(7f, 15f); horizontalLineTo(13f); moveTo(15.5f, 15f); horizontalLineTo(17f)
-} }
-private val IcMusic by lazy { vec("music") {
-    moveTo(9f, 17f); verticalLineTo(5f); lineTo(19f, 3f); verticalLineTo(15f)
-    moveTo(4.5f, 17f); arcTo(2.5f, 2.5f, 0f, true, true, 9.5f, 17f); arcTo(2.5f, 2.5f, 0f, true, true, 4.5f, 17f)
-    moveTo(14.5f, 15f); arcTo(2.5f, 2.5f, 0f, true, true, 19.5f, 15f); arcTo(2.5f, 2.5f, 0f, true, true, 14.5f, 15f)
-} }
-private val IcLayers by lazy { vec("layers") {
-    moveTo(12f, 3f); lineTo(21f, 8f); lineTo(12f, 13f); lineTo(3f, 8f); close()
-    moveTo(3f, 12f); lineTo(12f, 17f); lineTo(21f, 12f)
-    moveTo(3f, 16f); lineTo(12f, 21f); lineTo(21f, 16f)
-} }
-private val IcPause by lazy { vec("pause") {
-    moveTo(8f, 5f); lineTo(8f, 19f)
-    moveTo(16f, 5f); lineTo(16f, 19f)
-} }
-private val IcEngine by lazy { vec("engine") {
-    moveTo(5f, 8f); lineTo(10f, 12f); lineTo(5f, 16f)
-    moveTo(12.5f, 17f); lineTo(19f, 17f)
-} }
+private val IcDownload get() = Ico.Download
+private val IcLink get() = Ico.Link
+private val IcWifi get() = Ico.Wifi
+private val IcSubs get() = Ico.Subs
+private val IcMusic get() = Ico.Music
+private val IcLayers get() = Ico.Layers
+private val IcPause get() = Ico.Pause
+private val IcEngine get() = Ico.Terminal
 
 // ═══════════════════════════ أشكال وحركة ═══════════════════════════
 
@@ -365,17 +310,17 @@ fun qTag(h: Int) = when {
 }
 
 
-// الجودة الحقيقية = الضلع الأقصر (عشان الفيديو الطولي 1080x1920 يبقى 1080p مش 1920p)
-// وبنقرّبها لأقرب رقم قياسي، وبنشيل الأصوات والتكرار
-fun qList(i: VideoInfo): List<Int> = i.formats.orEmpty().mapNotNull { f ->
-    val h = (f.height as Number?)?.toInt() ?: 0
-    val w = (f.width as Number?)?.toInt() ?: 0
-    if (h <= 0 || f.vcodec == "none") null
-    else {
-        val short = if (w > 0) minOf(w, h) else h
-        LADDER.lastOrNull { it <= short * 1.08 } ?: LADDER.first()
+// حجم بالميجا/الجيجا. «≈» لو الرقم تقدير مش حجم دقيق من الموقع
+fun sz(bytes: Long, approx: Boolean): String {
+    if (bytes <= 0) return ""
+    val mb = bytes / 1048576.0
+    val t = when {
+        mb >= 1024 -> String.format(java.util.Locale.US, "%.2f GB", mb / 1024)
+        mb >= 100 -> String.format(java.util.Locale.US, "%.0f MB", mb)
+        else -> String.format(java.util.Locale.US, "%.1f MB", mb)
     }
-}.distinct().sortedDescending().take(7)
+    return if (approx) "≈ $t" else t
+}
 
 // ═══════════════════════════ عناصر مشتركة ═══════════════════════════
 
@@ -430,7 +375,18 @@ private fun SettingRow(icon: ImageVector?, title: String, sub: String? = null, s
 
 @Composable
 private fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit) =
-    Switch(checked, onChange, thumbContent = if (checked) ({ Icon(Icons.Rounded.Check, null, Modifier.size(SwitchDefaults.IconSize)) }) else null)
+    Switch(checked, onChange, thumbContent = if (checked) ({ Icon(Ico.Check, null, Modifier.size(SwitchDefaults.IconSize)) }) else null)
+
+// صف خيارات (شرائح) بيتحرّك أفقيًا
+@Composable
+private fun Choices(opts: List<String>, sel: Int, on: (Int) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        opts.forEachIndexed { i, o ->
+            FilterChip(selected = sel == i, onClick = { on(i) }, label = { Text(o) },
+                leadingIcon = if (sel == i) ({ Icon(Ico.Check, null, Modifier.size(18.dp)) }) else null)
+        }
+    }
+}
 
 // مبدّل بحبّة بتنزلق بين الخيارات
 @Composable
@@ -555,9 +511,9 @@ private fun FloatingNav(sel: Int, badge: Int, on: (Int) -> Unit) {
     val hap = LocalHapticFeedback.current
     val items = remember {
         listOf(
-            NavTab("الرئيسية", Icons.Rounded.Home, Icons.Outlined.Home),
-            NavTab("المكتبة", Icons.Rounded.PlayArrow, Icons.Outlined.PlayArrow),
-            NavTab("الإعدادات", Icons.Rounded.Settings, Icons.Outlined.Settings)
+            NavTab("الرئيسية", Ico.Home, Ico.Home),
+            NavTab("المكتبة", Ico.Library, Ico.Library),
+            NavTab("الإعدادات", Ico.Settings, Ico.Settings)
         )
     }
     Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 10.dp) {
@@ -614,14 +570,14 @@ private fun HomeHero(compact: Boolean) {
 }
 
 @Composable
-private fun HowTo() {
+private fun HowTo(top: Dp = 36.dp) {
     val cs = MaterialTheme.colorScheme
     val steps = listOf(
         "افتح الفيديو في يوتيوب أو إنستجرام أو فيسبوك أو تيك توك",
         "اضغط مشاركة واختار Grab، أو انسخ الرابط والصقه فوق",
         "اختار الجودة أو الصوت واضغط تحميل"
     )
-    Column(Modifier.fillMaxWidth().padding(top = 36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = top), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Text("إزاي تستخدمه؟", style = MaterialTheme.typography.titleLarge)
         steps.forEachIndexed { i, t ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -647,7 +603,7 @@ fun HomeScreen(bottom: Dp) {
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     var url by remember { mutableStateOf(Prefs.draft) }
     LaunchedEffect(url) { Prefs.draft = url }
-    var info by remember { mutableStateOf<VideoInfo?>(null) }
+    var info by remember { mutableStateOf<Info?>(null) }
     var loading by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf("") }
     var kind by remember { mutableIntStateOf(0) }
@@ -664,6 +620,9 @@ fun HomeScreen(bottom: Dp) {
     var clipFrom by remember { mutableStateOf("") }
     var clipTo by remember { mutableStateOf("") }
     val clipLink by Incoming.clip.collectAsState()
+    // شرح الاستخدام بيظهر أول مرة تفتح فيها التطبيق بس (وتقدر تشوفه تاني من الإعدادات)
+    val showHow = remember { Prefs.firstRun }
+    LaunchedEffect(Unit) { if (Prefs.firstRun) { Prefs.firstRun = false; Prefs.save() } }
     val inc by Incoming.v.collectAsState()
     val ready by Repo.ready
     val engineSt by Repo.status
@@ -744,7 +703,7 @@ fun HomeScreen(bottom: Dp) {
                             Text(cl, maxLines = 1, overflow = TextOverflow.Ellipsis, color = cs.onSecondaryContainer)
                         }
                         TextButton({ url = cl; go() }) { Text("جلب") }
-                        IconButton({ Prefs.lastClip = cl; Incoming.clip.value = null }) { Icon(Icons.Rounded.Close, "تجاهل") }
+                        IconButton({ Prefs.lastClip = cl; Incoming.clip.value = null }) { Icon(Ico.Close, "تجاهل") }
                     }
                 }
             }
@@ -761,7 +720,7 @@ fun HomeScreen(bottom: Dp) {
                             .clickable { clip.getText()?.text?.let { txt -> url = urlsOf(txt).joinToString(" ").ifEmpty { txt.trim() }; go() } }
                             .padding(horizontal = 16.dp, vertical = 9.dp)) {
                             Text("لصق وجلب", color = cs.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
-                        } else IconButton({ url = ""; err = ""; info = null }) { Icon(Icons.Rounded.Close, "مسح") }
+                        } else IconButton({ url = ""; err = ""; info = null }) { Icon(Ico.Close, "مسح") }
                     },
                     supportingText = if (url.isNotBlank() && !url.trim().startsWith("http", true))
                         ({ Text("ده مش شكل رابط — هحاول معاه برضه") }) else null,
@@ -773,7 +732,7 @@ fun HomeScreen(bottom: Dp) {
                 Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     FilterChip(selected = playlist, onClick = { playlist = !playlist }, label = { Text("قائمة تشغيل كاملة") },
-                        leadingIcon = if (playlist) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null)
+                        leadingIcon = if (playlist) ({ Icon(Ico.Check, null, Modifier.size(18.dp)) }) else null)
                 }
             }
             item {
@@ -794,7 +753,7 @@ fun HomeScreen(bottom: Dp) {
             if (err.isNotEmpty()) item {
                 Column(Modifier.padding(top = 16.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Rounded.Warning, null, Modifier.size(22.dp), tint = cs.error)
+                        Icon(Ico.Warning, null, Modifier.size(22.dp), tint = cs.error)
                         Text(err, style = MaterialTheme.typography.bodyMedium, color = cs.error)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -806,7 +765,7 @@ fun HomeScreen(bottom: Dp) {
 
             info?.let { i ->
                 item {
-                    val dur = fmt((i.duration as Number?)?.toInt() ?: 0)
+                    val dur = fmt(i.duration)
                     Column(Modifier.padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Box {
                             Thumb(i.thumbnail, Modifier.fillMaxWidth().aspectRatio(16 / 9f)
@@ -823,14 +782,20 @@ fun HomeScreen(bottom: Dp) {
                         }
                         Switcher(listOf("فيديو", "صوت"), kind) { kind = it }
                         if (kind == 0) {
-                            val hs = qList(i)
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                QChip("الأفضل", "تلقائي", h == 0) { h = 0 }
-                                hs.forEach { q -> QChip("${q}p", qTag(q), h == q) { h = q } }
+                                QChip("الأفضل", "تلقائي", i.qs.firstOrNull()?.let { sz(it.bytes, it.approx) } ?: "", h == 0) { h = 0 }
+                                i.qs.forEach { q -> QChip("${q.h}p", qTag(q.h), sz(q.bytes, q.approx), h == q.h) { h = q.h } }
                             }
+                            if (i.qs.any { it.bytes > 0 }) Footnote(
+                                if (clipOn) "الأحجام للفيديو كامل (فيديو + صوت)، والجزء المحدد هيبقى أصغر."
+                                else "الحجم الحقيقي للفيديو + الصوت لكل جودة. «≈» يعني تقدير.")
                             SettingRow(IcSubs, "تضمين الترجمة", onClick = { subs = !subs }) { Toggle(subs) { subs = it } }
-                        } else SettingRow(IcMusic, "الصيغة: ${Prefs.audioFmt.uppercase()}", "تتغير من الإعدادات")
-                        SettingRow(IcLayers, "تحميل جزء فقط", "حدّد بداية ونهاية المقطع", onClick = { clipOn = !clipOn }) { Toggle(clipOn) { clipOn = it } }
+                        } else {
+                            val a = i.audioEst(Prefs.audioFmt)
+                            SettingRow(IcMusic, "الصيغة: ${Prefs.audioFmt.uppercase()}",
+                                (if (a.first > 0) "الحجم ${sz(a.first, a.second)} • " else "") + "الصيغة تتغير من الإعدادات")
+                        }
+                        SettingRow(Ico.Scissors, "تحميل جزء فقط", "حدّد بداية ونهاية المقطع", onClick = { clipOn = !clipOn }) { Toggle(clipOn) { clipOn = it } }
                         if (clipOn) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedTextField(clipFrom, { clipFrom = it.filter { c -> c.isDigit() || c == ':' } }, Modifier.weight(1f),
                                 label = { Text("من (0:30)") }, singleLine = true)
@@ -932,7 +897,7 @@ fun HomeScreen(bottom: Dp) {
                     }
                 }
                 items(Repo.tasks, key = { it.id }) { TaskRow(it, Modifier.animateItem()) }
-            } else if (info == null && err.isEmpty() && !loading) item { HowTo() }
+            } else if (showHow && info == null && err.isEmpty() && !loading) item { HowTo() }
         }
     }
 
@@ -953,7 +918,7 @@ fun HomeScreen(bottom: Dp) {
 }
 
 @Composable
-private fun QChip(top: String, sub: String, sel: Boolean, onClick: () -> Unit) {
+private fun QChip(top: String, sub: String, size: String, sel: Boolean, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val bg by animateColorAsState(if (sel) cs.primary else cs.surfaceContainerHigh, label = "qc")
     val fg = if (sel) cs.onPrimary else cs.onSurface
@@ -962,6 +927,7 @@ private fun QChip(top: String, sub: String, sel: Boolean, onClick: () -> Unit) {
         .padding(horizontal = 22.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(top, color = fg, style = MaterialTheme.typography.titleMedium)
         Text(sub, color = fg.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall)
+        if (size.isNotEmpty()) Text(size, Modifier.padding(top = 4.dp), color = fg, style = MaterialTheme.typography.labelMedium)
     }
 }
 
@@ -976,15 +942,15 @@ fun TaskRow(t: Task, modifier: Modifier = Modifier) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
             when (t.st) {
-                St.Running -> WavyBar(if (t.progress > 0f) p else null)
+                St.Running -> WavyBar(if (t.progress > 0f && t.progress < 0.995f) p else null)
                 St.Queued -> WavyBar(0f)
                 else -> {}
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (t.st == St.Done) Icon(Icons.Rounded.CheckCircle, null, Modifier.size(18.dp), tint = cs.tertiary)
+                if (t.st == St.Done) Icon(Ico.CheckCircle, null, Modifier.size(18.dp), tint = cs.tertiary)
                 Text(when (t.st) {
                     St.Queued -> "في الانتظار"
-                    St.Running -> if (t.msg.isNotEmpty() && t.progress == 0f) t.msg else "${(t.progress * 100).toInt()}%" + if (t.eta > 0) " • باقي ${t.eta}ث" else ""
+                    St.Running -> if (t.msg.isNotEmpty() && (t.progress == 0f || t.progress >= 0.995f)) t.msg else "${(t.progress * 100).toInt()}%" + if (t.eta > 0) " • باقي ${t.eta}ث" else ""
                     St.Failed -> t.msg
                     St.Canceled -> t.msg.ifEmpty { "أُلغي" }
                     St.Done -> "تم التحميل"
@@ -995,13 +961,13 @@ fun TaskRow(t: Task, modifier: Modifier = Modifier) {
         }
         when (t.st) {
             St.Running, St.Queued -> Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (t.st == St.Queued) IconButton({ Repo.startNow(ctx, t) }) { Icon(Icons.Rounded.PlayArrow, "ابدأ الآن") }
+                if (t.st == St.Queued) IconButton({ Repo.startNow(ctx, t) }) { Icon(Ico.Play, "ابدأ الآن") }
                 IconButton({ Repo.pause(t) }) { Icon(IcPause, "إيقاف مؤقت") }
-                FilledTonalIconButton({ Repo.cancel(t) }) { Icon(Icons.Rounded.Close, "إلغاء") }
+                FilledTonalIconButton({ Repo.cancel(t) }) { Icon(Ico.Close, "إلغاء") }
             }
             St.Failed, St.Canceled -> Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                FilledTonalIconButton({ if (t.waitNet) Repo.startNow(ctx, t) else Repo.enqueue(ctx, t) }) { Icon(Icons.Rounded.Refresh, "إعادة") }
-                IconButton({ Repo.drop(t) }) { Icon(Icons.Rounded.Delete, "حذف") }
+                FilledTonalIconButton({ if (t.waitNet) Repo.startNow(ctx, t) else Repo.enqueue(ctx, t) }) { Icon(Ico.Refresh, "إعادة") }
+                IconButton({ Repo.drop(t) }) { Icon(Ico.Delete, "حذف") }
             }
             else -> {}
         }
@@ -1058,9 +1024,9 @@ fun LibraryScreen(bottom: Dp) {
                 .padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("${sel.size} محدد", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
                 TextButton({ sel = list.map { it.uri }.toSet() }) { Text("الكل") }
-                IconButton({ shareItems(ctx, Repo.library.filter { it.uri in sel }) }) { Icon(Icons.Rounded.Share, "مشاركة") }
-                IconButton({ delMany = true }) { Icon(Icons.Rounded.Delete, "حذف") }
-                IconButton({ sel = emptySet() }) { Icon(Icons.Rounded.Close, "إلغاء التحديد") }
+                IconButton({ shareItems(ctx, Repo.library.filter { it.uri in sel }) }) { Icon(Ico.Share, "مشاركة") }
+                IconButton({ delMany = true }) { Icon(Ico.Delete, "حذف") }
+                IconButton({ sel = emptySet() }) { Icon(Ico.Close, "إلغاء التحديد") }
             }
         }
         item(span = full) {
@@ -1069,15 +1035,15 @@ fun LibraryScreen(bottom: Dp) {
                 modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp),
                 shape = RoundedCornerShape(30.dp), colors = fieldColors(),
                 placeholder = { Text("ابحث في تنزيلاتك") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Icons.Rounded.Close, "مسح") } }
+                leadingIcon = { Icon(Ico.Search, null) },
+                trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Ico.Close, "مسح") } }
             )
         }
         item(span = full) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf("الكل", "فيديو", "صوت").forEachIndexed { i, l ->
                     FilterChip(selected = f == i, onClick = { f = i }, label = { Text(l) },
-                        leadingIcon = if (f == i) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null)
+                        leadingIcon = if (f == i) ({ Icon(Ico.Check, null, Modifier.size(18.dp)) }) else null)
                 }
             }
         }
@@ -1085,13 +1051,13 @@ fun LibraryScreen(bottom: Dp) {
         if (audios.isNotEmpty() && f != 1 && !selecting) item(span = full) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FilledTonalButton({ openItem(ctx, audios[0], audios) }) {
-                    Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("تشغيل الصوت (${audios.size})")
+                    Icon(Ico.Play, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("تشغيل الصوت (${audios.size})")
                 }
                 OutlinedButton({ val sh = audios.shuffled(); openItem(ctx, sh[0], sh) }) { Text("عشوائي") }
             }
         }
         if (list.isEmpty()) item(span = full) {
-            EmptyState(Icons.Rounded.PlayArrow, if (Repo.library.isEmpty()) "المكتبة فاضية" else "مفيش نتائج",
+            EmptyState(Ico.Play, if (Repo.library.isEmpty()) "المكتبة فاضية" else "مفيش نتائج",
                 if (Repo.library.isEmpty()) "اللي تحمّله هيظهر هنا." else "جرّب كلمة تانية أو فلتر تاني.")
         }
         items(list, key = { it.uri }) { i ->
@@ -1104,15 +1070,15 @@ fun LibraryScreen(bottom: Dp) {
                         },
                         onLongClick = { sel = if (i.uri in sel) sel - i.uri else sel + i.uri }), contentAlignment = Alignment.Center) {
                     if (i.thumb != null) Thumb(i.thumb, Modifier.fillMaxSize())
-                    else CookieIcon(if (i.audio) IcMusic else Icons.Rounded.PlayArrow, 72.dp, cs.primaryContainer, cs.onPrimaryContainer, spin = false)
+                    else CookieIcon(if (i.audio) IcMusic else Ico.Play, 72.dp, cs.primaryContainer, cs.onPrimaryContainer, spin = false)
                     Box(Modifier.align(Alignment.TopStart).padding(10.dp).clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.55f)).padding(7.dp)) {
-                        Icon(if (i.audio) IcMusic else Icons.Rounded.PlayArrow, null, Modifier.size(16.dp), tint = Color.White)
+                        Icon(if (i.audio) IcMusic else Ico.Play, null, Modifier.size(16.dp), tint = Color.White)
                     }
                     if (i.uri in sel) {
                         Box(Modifier.fillMaxSize().background(cs.primary.copy(alpha = 0.35f)))
                         Box(Modifier.align(Alignment.TopEnd).padding(10.dp).clip(CircleShape).background(cs.primary).padding(6.dp)) {
-                            Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = cs.onPrimary)
+                            Icon(Ico.Check, null, Modifier.size(16.dp), tint = cs.onPrimary)
                         }
                     }
                 }
@@ -1121,8 +1087,8 @@ fun LibraryScreen(bottom: Dp) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (i.audio) "صوت" else "فيديو", Modifier.weight(1f).padding(horizontal = 4.dp),
                         style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                    IconButton({ shareItem(ctx, i) }, Modifier.size(36.dp)) { Icon(Icons.Rounded.Share, "مشاركة", Modifier.size(20.dp)) }
-                    IconButton({ del = i }, Modifier.size(36.dp)) { Icon(Icons.Rounded.Delete, "حذف", Modifier.size(20.dp)) }
+                    IconButton({ shareItem(ctx, i) }, Modifier.size(36.dp)) { Icon(Ico.Share, "مشاركة", Modifier.size(20.dp)) }
+                    IconButton({ del = i }, Modifier.size(36.dp)) { Icon(Ico.Delete, "حذف", Modifier.size(20.dp)) }
                 }
             }
         }
@@ -1177,6 +1143,8 @@ fun SettingsScreen(bottom: Dp) {
     val hasCk by Repo.hasCookies
     var ver by remember { mutableStateOf("") }
     var ckMsg by remember { mutableStateOf("") }
+    var howDialog by remember { mutableStateOf(false) }
+    val sites = Repo.cookieSites
     LaunchedEffect(ready, st) { if (ready) ver = withContext(Dispatchers.IO) { Repo.version() } }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) ckMsg = if (Repo.importCookies(u)) "تم استيراد الكوكيز ✓" else "الملف مش بصيغة cookies.txt صحيحة"
@@ -1207,7 +1175,7 @@ fun SettingsScreen(bottom: Dp) {
             }
         }
         item {
-            SettingRow(IcDownload, "تحميل سريع من المشاركة", "لما تشارك رابط يبدأ التحميل فورًا بدون نافذة اختيار", onClick = { Prefs.shareQuick = !Prefs.shareQuick; Prefs.save() }) {
+            SettingRow(Ico.Share, "تحميل سريع من المشاركة", "لما تشارك رابط يبدأ التحميل فورًا بدون نافذة اختيار", onClick = { Prefs.shareQuick = !Prefs.shareQuick; Prefs.save() }) {
                 Toggle(Prefs.shareQuick) { Prefs.shareQuick = it; Prefs.save() }
             }
         }
@@ -1225,10 +1193,15 @@ fun SettingsScreen(bottom: Dp) {
             }
         }
         item {
-            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SettingRow(IcSubs, "طريقة الترجمة")
-                Switcher(listOf("تضمين في الفيديو", "ملف SRT منفصل"), Prefs.subsMode) { Prefs.subsMode = it; Prefs.save() }
-                Footnote("الملف المنفصل بيتحمّل بعد الفيديو، فلو يوتيوب رفضه الفيديو بيتحمّل عادي.")
+                Choices(listOf("مدمجة في الفيديو", "ملف SRT منفصل", "مدمجة + منفصلة", "ترجمة فقط"), Prefs.subsMode) { Prefs.subsMode = it; Prefs.save() }
+                Footnote(when (Prefs.subsMode) {
+                    1 -> "الملف المنفصل بيتحمّل بعد الفيديو، فلو يوتيوب رفضه الفيديو بيتحمّل عادي."
+                    2 -> "الترجمة بتتدمج في الفيديو وبتتحفظ كمان كملف SRT."
+                    3 -> "بينزّل ملف الترجمة بس من غير الفيديو (لما تفعّل «تضمين الترجمة»)."
+                    else -> "الترجمة بتتدمج جوه ملف الفيديو."
+                })
             }
         }
         item {
@@ -1253,8 +1226,32 @@ fun SettingsScreen(bottom: Dp) {
             }
         }
         item {
-            SettingRow(IcDownload, "حفظ الصورة المصغّرة", "بتتحفظ في Pictures", onClick = { Prefs.saveThumb = !Prefs.saveThumb; Prefs.save() }) {
-                Toggle(Prefs.saveThumb) { Prefs.saveThumb = it; Prefs.save() }
+            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingRow(Ico.Library, "صورة الفيديو")
+                Choices(listOf("بدون", "الصورة فقط", "مدمجة في الفيديو", "ملف منفصل", "مدمجة + منفصلة"), Prefs.thumbMode) { Prefs.thumbMode = it; Prefs.save() }
+                Footnote(when (Prefs.thumbMode) {
+                    1 -> "بينزّل الصورة بس (في Pictures) من غير الفيديو."
+                    2 -> "الصورة بتتدمج كغلاف جوه الفيديو (ممكن تزوّد وقت المعالجة شوية)."
+                    3 -> "الفيديو + صورته كملف منفصل في Pictures."
+                    4 -> "الصورة مدمجة في الفيديو وكمان ملف منفصل في Pictures."
+                    else -> "من غير صور."
+                })
+            }
+        }
+        item {
+            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingRow(IcMusic, "الدبلجة ولغة الصوت")
+                Choices(listOf("الصوت الأصلي", "لغة مفضلة", "كل الأصوات"), Prefs.dubMode) { Prefs.dubMode = it; Prefs.save() }
+                if (Prefs.dubMode == 1) {
+                    val codes = listOf("ar", "en", "fr", "es", "de", "tr", "ru", "hi")
+                    Choices(listOf("عربي", "English", "Français", "Español", "Deutsch", "Türkçe", "Русский", "हिन्दी"),
+                        codes.indexOf(Prefs.dubLang)) { Prefs.dubLang = codes[it]; Prefs.save() }
+                }
+                Footnote(when (Prefs.dubMode) {
+                    1 -> "لو الفيديو فيه صوت بلغتك المفضلة بيتحمّل بيه، وإلا بيتحمّل الأصلي."
+                    2 -> "كل مسارات الصوت (الدبلجات) بتتدمج في ملف MKV وتختار منها وقت التشغيل."
+                    else -> "الصوت الأصلي للفيديو."
+                })
             }
         }
         item {
@@ -1265,7 +1262,7 @@ fun SettingsScreen(bottom: Dp) {
 
         item { SectionTitle("مكان الحفظ") }
         item {
-            SettingRow(IcLayers, "مجلد مخصص", if (Prefs.treeUri.isEmpty()) "الافتراضي: Movies / Music"
+            SettingRow(Ico.Folder, "مجلد مخصص", if (Prefs.treeUri.isEmpty()) "الافتراضي: Movies / Music"
                 else Uri.decode(Uri.parse(Prefs.treeUri).lastPathSegment ?: Prefs.treeUri)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     FilledTonalButton({ treePick.launch(null) }) { Text("اختيار") }
@@ -1294,7 +1291,7 @@ fun SettingsScreen(bottom: Dp) {
 
         item { SectionTitle("الجدولة") }
         item {
-            SettingRow(IcLayers, "تحميل في ساعات معينة", "التحميلات بتستنى لحد الموعد وبتبدأ لوحدها", onClick = { Prefs.schedOn = !Prefs.schedOn; Prefs.save() }) {
+            SettingRow(Ico.Clock, "تحميل في ساعات معينة", "التحميلات بتستنى لحد الموعد وبتبدأ لوحدها", onClick = { Prefs.schedOn = !Prefs.schedOn; Prefs.save() }) {
                 Toggle(Prefs.schedOn) { Prefs.schedOn = it; Prefs.save() }
             }
         }
@@ -1305,7 +1302,7 @@ fun SettingsScreen(bottom: Dp) {
             }
         }
         item {
-            SettingRow(IcDownload, "وقت الشحن فقط", "ما يحمّلش إلا والموبايل على الشاحن", onClick = { Prefs.chargingOnly = !Prefs.chargingOnly; Prefs.save() }) {
+            SettingRow(Ico.Zap, "وقت الشحن فقط", "ما يحمّلش إلا والموبايل على الشاحن", onClick = { Prefs.chargingOnly = !Prefs.chargingOnly; Prefs.save() }) {
                 Toggle(Prefs.chargingOnly) { Prefs.chargingOnly = it; Prefs.save() }
             }
         }
@@ -1323,7 +1320,7 @@ fun SettingsScreen(bottom: Dp) {
                             .then(if (Prefs.accent == a) Modifier.border(3.dp, cs.onSurface, CircleShape) else Modifier)
                             .clickable { Prefs.accent = a; Prefs.save() }, contentAlignment = Alignment.Center) {
                             if (a == 0) Text("A", style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
-                            else if (Prefs.accent == a) Icon(Icons.Rounded.Check, null, tint = Color.White)
+                            else if (Prefs.accent == a) Icon(Ico.Check, null, tint = Color.White)
                         }
                     }
                 }
@@ -1337,7 +1334,7 @@ fun SettingsScreen(bottom: Dp) {
                 Box(Modifier.clip(CircleShape).background(cs.primaryContainer).clickable { Repo.update() }
                     .padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp), tint = cs.onPrimaryContainer)
+                        Icon(Ico.Refresh, null, Modifier.size(18.dp), tint = cs.onPrimaryContainer)
                         Text("تحديث", color = cs.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
                     }
                 }
@@ -1345,21 +1342,125 @@ fun SettingsScreen(bottom: Dp) {
         }
         item { Footnote("بيتحدّث تلقائيًا كل 24 ساعة، وكمان لو التحميل فشل.") }
 
-        item { SectionTitle("كوكيز يوتيوب") }
+        item { SectionTitle("المتصفح الصغير والكوكيز") }
         item {
-            SettingRow(Icons.Rounded.Lock, "ملف الكوكيز", if (hasCk) "مفعّلة" else "غير مفعّلة",
-                subColor = if (hasCk) cs.tertiary else Color.Unspecified)
+            SettingRow(Ico.Globe, "المتصفح الصغير", "سجّل دخول في أي موقع (يوتيوب، فيسبوك، إنستجرام…) والكوكيز بتتحفظ لـ Grab",
+                onClick = { ctx.startActivity(Intent(ctx, LoginActivity::class.java)) }) {
+                FilledTonalButton({ ctx.startActivity(Intent(ctx, LoginActivity::class.java)) }) { Text("فتح") }
+            }
+        }
+        if (sites.isEmpty()) item {
+            SettingRow(Ico.Cookie, "مفيش مواقع مسجّلة", "افتح المتصفح الصغير وسجّل دخول في الموقع اللي عايزه")
+        } else {
+            item { SettingRow(Ico.Lock, "مواقع مسجّل دخولها", "${sites.size} موقع", subColor = cs.tertiary) }
+            items(sites.toList(), key = { "ck" + it.domain }) { site ->
+                SettingRow(Ico.Cookie, site.domain, "${site.count} كوكي") {
+                    IconButton({ Repo.deleteCookies(site.domain); ckMsg = "" }) { Icon(Ico.Delete, "حذف", tint = cs.error) }
+                }
+            }
         }
         item {
             Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (ckMsg.isNotEmpty()) Text(ckMsg, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button({ ctx.startActivity(Intent(ctx, LoginActivity::class.java)) }) { Text("تسجيل الدخول") }
                     FilledTonalButton({ picker.launch(arrayOf("*/*")) }) { Text("استيراد cookies.txt") }
-                    if (hasCk) TextButton({ Repo.clearCookies(); ckMsg = "" }) { Text("حذف", color = cs.error) }
+                    if (hasCk) TextButton({ Repo.clearCookies(); ckMsg = "" }) { Text("حذف الكل", color = cs.error) }
                 }
-                Footnote("لو يوتيوب طلب «تأكيد إنك مش بوت» فاستيراد الكوكيز هو الحل الأضمن. صدّر ملف cookies.txt من متصفحك (إضافة Get cookies.txt LOCALLY) وبعدين استورده هنا. يفضّل تستخدم حساب ثانوي.")
+                Footnote("الكوكيز بتتطبّق تلقائيًا على كل موقع بتحمّل منه. لو جوجل منعت تسجيل الدخول جوه المتصفح الصغير، صدّر cookies.txt من متصفحك (إضافة Get cookies.txt LOCALLY) واستورده هنا. يفضّل تستخدم حساب ثانوي.")
+            }
+        }
+
+        item { SectionTitle("عن التطبيق") }
+        item {
+            SettingRow(Ico.Info, "طريقة الاستخدام", "اعرض شرح الخطوات تاني",
+                onClick = { howDialog = true }) {
+                FilledTonalButton({ howDialog = true }) { Text("عرض") }
             }
         }
     }
+
+    if (howDialog) AlertDialog(
+        onDismissRequest = { howDialog = false },
+        text = { HowTo(top = 0.dp) },
+        confirmButton = { TextButton({ howDialog = false }) { Text("تمام") } }
+    )
+}
+
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.unit.dp
+
+// مجموعة أيقونات خطّية حديثة (24×24، حواف دايرية) مرسومة من مسارات SVG، فمفيش مكتبة أيقونات إضافية
+private fun icon(name: String, vararg paths: String): ImageVector =
+    ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
+        paths.forEach { d ->
+            addPath(
+                PathParser().parsePathString(d).toNodes(),
+                stroke = SolidColor(Color.Black), strokeLineWidth = 2f,
+                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round
+            )
+        }
+    }.build()
+
+object Ico {
+    val Home by lazy { icon("home",
+        "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8",
+        "M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z") }
+    val Library by lazy { icon("library", "M4 4v16", "M8 8v12", "M12 6v14", "M16 6l4 14") }
+    val Settings by lazy { icon("settings",
+        "M10 5H3", "M12 19H3", "M14 3v4", "M16 17v4", "M21 12h-9", "M21 19h-5", "M21 5h-7", "M8 10v4", "M8 12H3") }
+    val Download by lazy { icon("download",
+        "M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5") }
+    val Link by lazy { icon("link",
+        "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71",
+        "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71") }
+    val Wifi by lazy { icon("wifi",
+        "M12 20h.01", "M2 8.82a15 15 0 0 1 20 0", "M5 12.859a10 10 0 0 1 14 0", "M8.5 16.429a5 5 0 0 1 7 0") }
+    val Subs by lazy { icon("captions",
+        "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z",
+        "M7 15h4", "M15 15h2", "M7 11h2", "M13 11h4") }
+    val Music by lazy { icon("music",
+        "M9 18V5l12-2v13", "M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0z", "M21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z") }
+    val Layers by lazy { icon("layers",
+        "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z",
+        "M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12",
+        "M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17") }
+    val Pause by lazy { icon("pause",
+        "M15 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z",
+        "M6 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z") }
+    val Play by lazy { icon("play", "M6 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 6 4.5z") }
+    val Terminal by lazy { icon("terminal", "M4 17l6-6-6-6", "M12 19h8") }
+    val Cookie by lazy { icon("cookie",
+        "M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5",
+        "M8.5 8.5v.01", "M16 15.5v.01", "M12 12v.01", "M11 17v.01", "M7 14v.01") }
+    val Lock by lazy { icon("lock",
+        "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z", "M7 11V7a5 5 0 0 1 10 0v4") }
+    val Check by lazy { icon("check", "M20 6L9 17l-5-5") }
+    val CheckCircle by lazy { icon("check-circle", "M21.801 10A10 10 0 1 1 17 3.335", "M9 11l3 3L22 4") }
+    val Close by lazy { icon("close", "M18 6L6 18", "M6 6l12 12") }
+    val Delete by lazy { icon("trash",
+        "M3 6h18", "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6", "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2", "M10 11v6", "M14 11v6") }
+    val Refresh by lazy { icon("refresh", "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8", "M21 3v5h-5") }
+    val Search by lazy { icon("search", "M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M21 21l-4.3-4.3") }
+    val Share by lazy { icon("share",
+        "M21 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0z", "M9 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z", "M21 19a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+        "M8.59 13.51l6.83 3.98", "M15.41 6.51l-6.82 3.98") }
+    val Warning by lazy { icon("warning",
+        "M21.73 18l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3", "M12 9v4", "M12 17h.01") }
+    val Globe by lazy { icon("globe",
+        "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", "M2 12h20") }
+    val ArrowRight by lazy { icon("arrow-right", "M5 12h14", "M12 5l7 7-7 7") }
+    val Scissors by lazy { icon("scissors",
+        "M9 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z", "M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+        "M20 4L8.12 15.88", "M14.47 14.48L20 20", "M8.12 8.12L12 12") }
+    val Folder by lazy { icon("folder",
+        "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z") }
+    val Clock by lazy { icon("clock", "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 6v6l4 2") }
+    val Zap by lazy { icon("zap",
+        "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z") }
+    val Info by lazy { icon("info", "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 16v-4", "M12 8h.01") }
 }

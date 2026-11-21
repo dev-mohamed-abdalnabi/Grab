@@ -21,7 +21,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.yausername.youtubedl_android.mapper.VideoInfo
 import kotlinx.coroutines.launch
 
 // نافذة صغيرة بتظهر فوق أي تطبيق لما تشارك رابط — من غير ما التطبيق الأساسي يفتح
@@ -64,7 +63,7 @@ class ShareActivity : ComponentActivity() {
         val cs = MaterialTheme.colorScheme
         val ctx = LocalContext.current
         val scope = rememberCoroutineScope()
-        var info by remember { mutableStateOf<VideoInfo?>(null) }
+        var info by remember { mutableStateOf<Info?>(null) }
         var err by remember { mutableStateOf("") }
         var loading by remember { mutableStateOf(true) }
         var audio by remember { mutableStateOf(false) }
@@ -110,7 +109,7 @@ class ShareActivity : ComponentActivity() {
                                     .background(cs.surfaceContainerHigh))
                                 Column(Modifier.weight(1f)) {
                                     Text(i.title ?: "", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                                    val d = fmt((i.duration as Number?)?.toInt() ?: 0)
+                                    val d = fmt(i.duration)
                                     Text(listOfNotNull(i.uploader, d.ifEmpty { null }).joinToString(" • "), maxLines = 1,
                                         overflow = TextOverflow.Ellipsis, color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 }
@@ -119,14 +118,22 @@ class ShareActivity : ComponentActivity() {
                                 Text("⚠ ده اتحمّل قبل كده (أو بيتحمّل دلوقتي)", color = cs.tertiary, style = MaterialTheme.typography.bodySmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(!audio, { audio = false }, { Text("فيديو") })
-                                FilterChip(audio, { audio = true }, { Text("صوت ${Prefs.audioFmt.uppercase()}") })
+                                FilterChip(audio, { audio = true }, {
+                                    Text("صوت ${Prefs.audioFmt.uppercase()}" +
+                                        i.audioEst(Prefs.audioFmt).let { a -> if (a.first > 0) " · " + sz(a.first, a.second) else "" })
+                                })
                                 if (!audio) FilterChip(subs, { subs = !subs }, { Text("ترجمة") })
                             }
                             if (!audio) {
-                                val hs = qList(i)
                                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    FilterChip(h == 0, { h = 0 }, { Text("الأفضل") })
-                                    hs.forEach { q -> FilterChip(h == q, { h = q }, { Text("${q}p · ${qTag(q)}") }) }
+                                    FilterChip(h == 0, { h = 0 }, {
+                                        Text("الأفضل" + (i.qs.firstOrNull()?.let { b -> if (b.bytes > 0) " · " + sz(b.bytes, b.approx) else "" } ?: ""))
+                                    })
+                                    i.qs.forEach { q ->
+                                        FilterChip(h == q.h, { h = q.h }, {
+                                            Text("${q.h}p · " + (if (q.bytes > 0) sz(q.bytes, q.approx) else qTag(q.h)))
+                                        })
+                                    }
                                 }
                             }
                             Button({ start(i.title ?: link, i.thumbnail, audio, h) }, Modifier.fillMaxWidth().height(54.dp)) { Text("تحميل") }
