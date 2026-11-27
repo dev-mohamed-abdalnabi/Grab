@@ -39,6 +39,7 @@ class Task(
     var uploader: String? = null
     var clipStart = ""
     var clipEnd = ""
+    var thumbOnly = false       // تبويب الصورة: ننزّل الصورة بس من غير الفيديو
     var keep = false            // إيقاف مؤقت: نحتفظ بالجزء المحمّل عشان نكمّل منه
     var waitNet = false         // مستني النت/الواي فاي: بيكمّل لوحده لما يرجع
     var waitSince = 0L
@@ -51,8 +52,38 @@ class Task(
     var st by mutableStateOf(St.Queued)
     var progress by mutableFloatStateOf(0f)
     var eta by mutableLongStateOf(0L)
+    var speed by mutableLongStateOf(0L)    // بايت في الثانية (متوسط متحرك)
+    var done by mutableLongStateOf(0L)     // اللي نزل لحد دلوقتي
+    var total by mutableLongStateOf(0L)    // الحجم الكلي (تقديري لو الموقع مادّاش رقم)
+    var expect = 0L                        // الحجم المتوقع من المعاينة (فيديو + صوت)
     var msg by mutableStateOf("")
     var job: Job? = null
+}
+
+// وقت متبقي بالدقايق (مش بالثواني)
+private fun minsAr(m: Long) = when {
+    m <= 1L -> "دقيقة"
+    m == 2L -> "دقيقتين"
+    m in 3L..10L -> "$m دقايق"
+    else -> "$m دقيقة"
+}
+
+fun etaText(sec: Long): String {
+    if (sec <= 0L) return ""
+    if (sec < 60L) return "أقل من دقيقة"
+    val m = (sec + 30L) / 60L
+    if (m < 60L) return minsAr(m)
+    val h = m / 60L; val r = m % 60L
+    val hs = when { h == 1L -> "ساعة"; h == 2L -> "ساعتين"; h in 3L..10L -> "$h ساعات"; else -> "$h ساعة" }
+    return if (r > 0L) "$hs و${minsAr(r)}" else hs
+}
+
+// سطر مختصر للإشعار: النسبة • السرعة • الوقت المتبقي
+fun briefOf(t: Task): String {
+    val parts = mutableListOf("${(t.progress * 100).toInt()}%")
+    if (t.speed > 0L) parts.add(sz(t.speed, false) + "/s")
+    etaText(t.eta).takeIf { it.isNotEmpty() }?.let { parts.add("باقي $it") }
+    return parts.joinToString(" • ")
 }
 
 class Item(val title: String, val thumb: String?, val uri: String, val audio: Boolean, val src: String = "")
@@ -96,6 +127,8 @@ object Prefs {
     var subs by mutableStateOf(false)
     var concurrent by mutableIntStateOf(2)
     var audioFmt by mutableStateOf("m4a")
+    var audioQ by mutableIntStateOf(1)         // جودة MP3: 0 = 320، 1 = 192، 2 = 128
+    var audioCover by mutableStateOf(true)     // غلاف الألبوم جوه ملف الصوت
     var limit by mutableIntStateOf(0)          // حد السرعة MB/s (0 = بدون)
     var subsMode by mutableIntStateOf(0)       // 0 تضمين، 1 ملف منفصل، 2 الاتنين، 3 ترجمة فقط (من غير فيديو)
     var organize by mutableIntStateOf(0)       // 0 عادي، 1 حسب الموقع، 2 حسب القناة
@@ -104,7 +137,7 @@ object Prefs {
     var saveDesc by mutableStateOf(false)
     var shareQuick by mutableStateOf(false)   // من نافذة المشاركة: ابدأ التحميل فورًا بالإعدادات الافتراضية
     var nameTpl by mutableIntStateOf(0)       // 0 العنوان، 1 القناة - العنوان، 2 التاريخ - العنوان، 3 العنوان [المعرّف]
-    var embedMeta by mutableStateOf(true)     // بيانات + غلاف داخل ملفات الصوت
+    var embedMeta by mutableStateOf(true)     // بيانات الملف (العنوان والقناة) جوه الفيديو والصوت
     var subLangs by mutableStateOf("ar.*,en.*")
     var treeUri by mutableStateOf("")         // مجلد اختاره المستخدم (SAF). فاضي = Movies/Music
     var schedOn by mutableStateOf(false)
@@ -112,9 +145,15 @@ object Prefs {
     var schedTo by mutableIntStateOf(7)
     var chargingOnly by mutableStateOf(false)
     var theme by mutableIntStateOf(0)         // 0 النظام، 1 فاتح، 2 داكن
-    var thumbMode by mutableIntStateOf(0)     // 0 بدون، 1 صورة فقط، 2 مدمجة في الفيديو، 3 ملف منفصل، 4 مدمجة + منفصلة
+    var thumbMode by mutableIntStateOf(0)     // للفيديو: 0 بدون، 2 مدمجة في الفيديو، 3 ملف منفصل، 4 مدمجة + منفصلة
+    var thumbFmt by mutableStateOf("jpg")     // صيغة الصورة: jpg / png / webp
+    var vFmt by mutableIntStateOf(0)          // حاوية الفيديو: 0 MP4، 1 MKV، 2 WEBM
+    var vCodec by mutableIntStateOf(0)        // 0 تلقائي، 1 H.264، 2 VP9، 3 AV1
+    var fpsMax by mutableIntStateOf(0)        // أقصى إطارات (0 = بدون حد)
+    var chapters by mutableStateOf(false)     // تضمين فصول الفيديو
     var dubMode by mutableIntStateOf(0)       // 0 الصوت الأصلي، 1 لغة مفضلة، 2 كل الأصوات في ملف MKV
     var dubLang by mutableStateOf("ar")
+    var homeTab by mutableIntStateOf(0)       // آخر تبويب في الرئيسية: 0 فيديو، 1 صوت، 2 صورة
     var firstRun by mutableStateOf(true)      // شرح الاستخدام بيظهر أول فتح بس
     var accent by mutableIntStateOf(0)        // 0 لون الخلفية، 1 أزرق، 2 أخضر، 3 بنفسجي، 4 برتقالي، 5 وردي
 
@@ -122,6 +161,7 @@ object Prefs {
         sp = c.getSharedPreferences("p", 0)
         wifiOnly = sp.getBoolean("w", false); subs = sp.getBoolean("s", false)
         concurrent = sp.getInt("c", 2); audioFmt = sp.getString("a", "m4a") ?: "m4a"
+        audioQ = sp.getInt("aq", 1); audioCover = sp.getBoolean("acv", true)
         shareQuick = sp.getBoolean("q", false)
         nameTpl = sp.getInt("nt", 0); embedMeta = sp.getBoolean("em", true); subLangs = sp.getString("sl", "ar.*,en.*") ?: "ar.*,en.*"
         treeUri = sp.getString("tu", "") ?: ""
@@ -129,6 +169,10 @@ object Prefs {
         chargingOnly = sp.getBoolean("co", false); theme = sp.getInt("tm", 0); accent = sp.getInt("ac", 0)
         firstRun = sp.getBoolean("fr", true)
         thumbMode = sp.getInt("tmo", if (sp.getBoolean("th", false)) 3 else 0)
+        if (thumbMode == 1) thumbMode = 0   // «صورة فقط» بقت تبويب لوحدها في الرئيسية
+        thumbFmt = sp.getString("tf", "jpg") ?: "jpg"
+        vFmt = sp.getInt("vf", 0); vCodec = sp.getInt("vc", 0); fpsMax = sp.getInt("fp", 0); chapters = sp.getBoolean("ch", false)
+        homeTab = sp.getInt("ht", 0).coerceIn(0, 2)
         dubMode = sp.getInt("dm", 0); dubLang = sp.getString("dl", "ar") ?: "ar"
         limit = sp.getInt("l", 0); subsMode = sp.getInt("sm", 0); organize = sp.getInt("o", 0)
         folder = sp.getString("f", "Grab") ?: "Grab"; saveThumb = sp.getBoolean("th", false); saveDesc = sp.getBoolean("de", false)
@@ -144,11 +188,14 @@ object Prefs {
 
     fun save() {
         sp.edit().putBoolean("w", wifiOnly).putBoolean("s", subs).putInt("c", concurrent).putString("a", audioFmt).putBoolean("q", shareQuick)
+            .putInt("aq", audioQ).putBoolean("acv", audioCover)
             .putInt("l", limit).putInt("sm", subsMode).putInt("o", organize).putString("f", folder)
             .putBoolean("th", saveThumb).putBoolean("de", saveDesc)
             .putInt("nt", nameTpl).putBoolean("em", embedMeta).putString("sl", subLangs).putString("tu", treeUri)
             .putBoolean("so", schedOn).putInt("sfr", schedFrom).putInt("sto", schedTo).putBoolean("co", chargingOnly)
-            .putInt("tm", theme).putInt("ac", accent).putBoolean("fr", firstRun).putInt("tmo", thumbMode).putInt("dm", dubMode).putString("dl", dubLang).apply()
+            .putInt("tm", theme).putInt("ac", accent).putBoolean("fr", firstRun).putInt("tmo", thumbMode).putString("tf", thumbFmt)
+            .putInt("vf", vFmt).putInt("vc", vCodec).putInt("fp", fpsMax).putBoolean("ch", chapters).putInt("ht", homeTab)
+            .putInt("dm", dubMode).putString("dl", dubLang).apply()
     }
 }
 
@@ -161,6 +208,9 @@ object Repo {
     val hasCookies = mutableStateOf(false)
     val cookieSites = mutableStateListOf<CookieSite>()
     val history = mutableStateListOf<Hist>()
+    // لما تحميل صورة/ترجمة بس يخلص (مش بيدخل المكتبة) الواجهة بتعرض رسالة
+    val extrasTick = mutableIntStateOf(0)
+    @Volatile var extrasMsg = ""
     lateinit var app: Context
     // عدد التحميلات المتزامنة بيتقرأ من الإعدادات في كل مرة، فالتغيير بيتطبّق فورًا
     private val slotLock = Any()
@@ -214,7 +264,7 @@ object Repo {
             m.contains("Unable to resolve host", true) || m.contains("timed out", true) || m.contains("Network is unreachable", true) ->
                 "مشكلة في الاتصال بالنت"
             m.contains("403") || m.contains("Forbidden", true) ->
-                "يوتيوب رفض التحميل (403). من الإعدادات اضغط «تحديث الآن» وجرّب تاني."
+                "يوتيوب رفض التحميل (403). من الإعدادات ← المحرك اضغط «تحديث» وجرّب تاني."
             m.contains("Private video", true) -> "الفيديو خاص"
             m.contains("Video unavailable", true) -> "الفيديو مش متاح"
             m.contains("age", true) && m.contains("confirm", true) -> "الفيديو مقيّد بالعمر، سجّل دخول من «المتصفح الصغير» في الإعدادات"
@@ -469,6 +519,7 @@ object Repo {
         if (t !in tasks) tasks.add(0, t)
         t.waitNet = false; t.lastTry = System.currentTimeMillis(); t.queuedAt = t.lastTry
         t.st = St.Queued; t.progress = 0f; t.msg = ""
+        t.speed = 0L; t.done = 0L; t.total = 0L; t.eta = 0L
         saveTasks()
         if (!auto || !DownloadService.looping)
             try { c.startForegroundService(Intent(c, DownloadService::class.java)) } catch (_: Throwable) {}
@@ -565,7 +616,7 @@ object Repo {
     // الرابط ده اتحمّل قبل كده بنفس النوع (فيديو/صوت)، أو لسه في التحميل دلوقتي؟
     fun dupOf(url: String, audio: Boolean): Dup? {
         val k = key(url)
-        tasks.firstOrNull { !it.playlist && it.audio == audio && key(it.url) == k &&
+        tasks.firstOrNull { !it.playlist && !it.thumbOnly && it.audio == audio && key(it.url) == k &&
             (it.st == St.Running || it.st == St.Queued || it.waitNet) }?.let { return Dup(it.title, null) }
         library.firstOrNull { it.src.isNotEmpty() && it.audio == audio && key(it.src) == k }?.let { return Dup(it.title, it) }
         return null
@@ -638,8 +689,8 @@ object Repo {
             }
             val plan = order(t.url).toMutableList()
             var idx = 0; var updated = updatedThisSession; var last: Throwable? = null; var ok = false; var netTries = 0
-            val tm = Prefs.thumbMode; val sm = Prefs.subsMode
-            val skipVideo = tm == 1 || (!t.audio && t.subs && sm == 3)   // صورة فقط / ترجمة فقط: من غير تحميل الفيديو
+            val sm = Prefs.subsMode
+            val skipVideo = t.thumbOnly || (!t.audio && t.subs && sm == 3)   // صورة فقط / ترجمة فقط: من غير تحميل الفيديو
             var useSubs = t.subs && !t.audio && !skipVideo && (sm == 0 || sm == 2)
             var useInfo = !t.playlist && !skipVideo
             var curH = t.height; var round2 = false; var okS = plan.first()
@@ -701,23 +752,40 @@ object Repo {
         }
     }
 
+    // سطر التقدّم بتاع yt-dlp: [download]  45.3% of ~ 10.00MiB at 2.00MiB/s ETA 00:03
+    private val PROG = Regex("""([\d.]+)%\s+of\s+~?\s*([\d.,]+)\s*([KMGT]?i?B)(?:\s+at\s+([\d.,]+)\s*([KMGT]?i?B)/s)?""")
+    private fun bytesOf(n: String, u: String): Long {
+        val v = n.replace(",", "").toDoubleOrNull() ?: return 0L
+        val k = when (u.firstOrNull()?.uppercaseChar()) {
+            'K' -> 1024.0; 'M' -> 1048576.0; 'G' -> 1073741824.0; 'T' -> 1099511627776.0; else -> 1.0
+        }
+        return (v * k).toLong()
+    }
+
     private fun attempt(t: Task, dir: File, strat: Int, withSubs: Boolean, height: Int, useInfo: Boolean) {
         val r = YoutubeDLRequest(t.url)
         if (useInfo) infoFile(t.url).takeIf { it.exists() && System.currentTimeMillis() - it.lastModified() < 2_700_000L }
             ?.let { r.addOption("--load-info-json", it.absolutePath) }
         r.addOption("-o", "${dir.absolutePath}/${nameTpl()}.%(ext)s")
         r.addOption("--no-mtime"); r.addOption("--continue"); common(r, strat, t.url)
-        if (Prefs.embedMeta) {
-            r.addOption("--embed-metadata")
-            if (t.audio && Prefs.audioFmt != "opus") { r.addOption("--embed-thumbnail"); r.addOption("--convert-thumbnails", "jpg") }
-        }
+        if (Prefs.embedMeta) r.addOption("--embed-metadata")
         if (Prefs.limit > 0) r.addOption("--limit-rate", "${Prefs.limit}M")
         r.addOption("--concurrent-fragments", "8")
         r.addOption(if (t.playlist) "--yes-playlist" else "--no-playlist")
+
+        // الصورة: مدمجة جوه الملف و/أو ملف منفصل
         val tm = Prefs.thumbMode
-        if (!t.audio && (tm == 2 || tm == 4)) { r.addOption("--embed-thumbnail"); r.addOption("--convert-thumbnails", "jpg") }
-        if (tm == 3 || tm == 4) { r.addOption("--write-thumbnail"); r.addOption("--convert-thumbnails", "jpg") }
+        val mkvOut = !t.audio && Prefs.dubMode == 2
+        val webmOut = !t.audio && !mkvOut && Prefs.vFmt == 2      // WEBM مبيدعمش غلاف مدمج
+        val embedThumb = if (t.audio) Prefs.audioCover && Prefs.audioFmt != "opus" else (tm == 2 || tm == 4) && !webmOut
+        val sepThumb = !t.audio && (tm == 3 || tm == 4)
+        if (embedThumb) r.addOption("--embed-thumbnail")
+        if (sepThumb) r.addOption("--write-thumbnail")
+        if (embedThumb || sepThumb)
+            r.addOption("--convert-thumbnails", if (t.audio || (embedThumb && Prefs.thumbFmt == "webp")) "jpg" else Prefs.thumbFmt)
+
         if (Prefs.saveDesc) r.addOption("--write-description")
+        if (!t.audio && Prefs.chapters) r.addOption("--embed-chapters")
         if (!t.playlist && (t.clipStart.isNotBlank() || t.clipEnd.isNotBlank()))
             r.addOption("--download-sections", "*${t.clipStart.ifBlank { "0" }}-${t.clipEnd.ifBlank { "inf" }}")
         if (t.audio) {
@@ -725,23 +793,47 @@ object Repo {
             r.addOption("-f", if (Prefs.audioFmt == "m4a") "ba[ext=m4a]/ba/b" else "ba/b")
             if (Prefs.dubMode == 1) r.addOption("-S", "lang:${Prefs.dubLang}")
             r.addOption("-x"); r.addOption("--audio-format", Prefs.audioFmt)
-            if (Prefs.audioFmt == "mp3") r.addOption("--audio-quality", "2")
+            if (Prefs.audioFmt == "mp3") r.addOption("--audio-quality", when (Prefs.audioQ) { 0 -> "320K"; 2 -> "128K"; else -> "192K" })
         } else {
-            val allAudio = Prefs.dubMode == 2
-            if (allAudio) { r.addOption("-f", "bv*+mergeall[vcodec=none]/bv*+ba/b"); r.addOption("--audio-multistreams") }
+            if (mkvOut) { r.addOption("-f", "bv*+mergeall[vcodec=none]/bv*+ba/b"); r.addOption("--audio-multistreams") }
             else r.addOption("-f", "bv*+ba/b")
-            val lang = if (Prefs.dubMode == 1) "lang:${Prefs.dubLang}," else ""
-            r.addOption("-S", lang + if (height > 0) "res:$height,ext:mp4:m4a" else "ext:mp4:m4a")
-            r.addOption("--merge-output-format", if (allAudio) "mkv" else "mp4")
+            // ترتيب التفضيلات: اللغة، الدقة، الكودك، الإطارات، الحاوية
+            val sort = mutableListOf<String>()
+            if (Prefs.dubMode == 1) sort.add("lang:${Prefs.dubLang}")
+            if (height > 0) sort.add("res:$height")
+            when (Prefs.vCodec) { 1 -> sort.add("vcodec:h264"); 2 -> sort.add("vcodec:vp9"); 3 -> sort.add("vcodec:av01") }
+            if (Prefs.fpsMax > 0) sort.add("fps:${Prefs.fpsMax}")
+            when (Prefs.vFmt) { 0 -> sort.add("ext:mp4:m4a"); 2 -> sort.add("ext:webm:webm") }
+            if (sort.isNotEmpty()) r.addOption("-S", sort.joinToString(","))
+            r.addOption("--merge-output-format", if (mkvOut) "mkv" else when (Prefs.vFmt) { 1 -> "mkv"; 2 -> "webm"; else -> "mp4" })
             if (withSubs) {
                 r.addOption("--write-subs"); r.addOption("--write-auto-subs")
                 r.addOption("--sub-langs", Prefs.subLangs); r.addOption("--embed-subs")
             }
         }
-        YoutubeDL.getInstance().execute(r, t.id, callback = { p, eta, _ ->
-            if (p >= 0f) t.progress = (p / 100f).coerceIn(0f, 1f)
-            t.eta = eta
-            if (p >= 99.5f) t.msg = "جاري الدمج والحفظ…"
+
+        // التقدّم: بنحسب اللي نزل والباقي والسرعة. الفيديو والصوت بيتحمّلوا كملفين، فلما النسبة ترجع للصفر نعدّ الملف اللي فات
+        var base = 0L; var prevP = 0f; var prevTot = 0L
+        YoutubeDL.getInstance().execute(r, t.id, callback = { p, eta, line ->
+            if (p >= 0f) {
+                var cur = prevTot; var sp = 0L
+                val m = PROG.find(line)
+                if (m != null) {
+                    cur = bytesOf(m.groupValues[2], m.groupValues[3])
+                    if (m.groupValues[4].isNotEmpty()) sp = bytesOf(m.groupValues[4], m.groupValues[5])
+                }
+                if (p + 30f < prevP && prevTot > 0L) base += prevTot
+                prevP = p; if (cur > 0L) prevTot = cur
+                val got = base + (cur * (p / 100.0)).toLong()
+                val tot = maxOf(if (t.expect > 0L) t.expect else base + cur, got)
+                t.done = got; t.total = tot
+                if (sp > 0L) t.speed = if (t.speed == 0L) sp else (t.speed * 0.7 + sp * 0.3).toLong()
+                val overall = t.expect > 0L && cur > 0L
+                t.progress = if (overall) (got.toDouble() / tot).toFloat().coerceIn(0f, 1f) else (p / 100f).coerceIn(0f, 1f)
+                val left = tot - got
+                t.eta = if (t.speed > 0L && left > 0L) left / t.speed else eta
+                if (p >= 99.5f && (!overall || t.progress >= 0.97f)) t.msg = "جاري الدمج والحفظ…"
+            }
         })
     }
 
@@ -759,15 +851,15 @@ object Repo {
         r.addOption("-o", "${dir.absolutePath}/${nameTpl()}.%(ext)s")
         r.addOption("--skip-download"); common(r, strat, t.url)
         r.addOption(if (t.playlist) "--yes-playlist" else "--no-playlist")
-        if (Prefs.thumbMode == 1 || Prefs.thumbMode == 3 || Prefs.thumbMode == 4) {
-            r.addOption("--write-thumbnail"); r.addOption("--convert-thumbnails", "jpg")
+        if (t.thumbOnly || Prefs.thumbMode == 3 || Prefs.thumbMode == 4) {
+            r.addOption("--write-thumbnail"); r.addOption("--convert-thumbnails", Prefs.thumbFmt)
         }
         if (t.subs) {
             r.addOption("--write-subs"); r.addOption("--write-auto-subs")
             r.addOption("--sub-langs", Prefs.subLangs); r.addOption("--convert-subs", "srt")
             r.addOption("--sleep-subtitles", "2")
         }
-        if (Prefs.saveDesc) r.addOption("--write-description")
+        if (Prefs.saveDesc && !t.thumbOnly) r.addOption("--write-description")
         YoutubeDL.getInstance().execute(r, t.id)
     }
 
@@ -779,6 +871,8 @@ object Repo {
         t.progress = 1f; t.st = St.Done
         notifyDone(t)
         tasks.remove(t)
+        extrasMsg = if (t.thumbOnly) "اتحفظت الصورة" else "اتحفظت الترجمة"
+        extrasTick.intValue++
     }
 
     private fun subsOnly(t: Task, dir: File, strat: Int) {
@@ -972,6 +1066,7 @@ object Repo {
                 val t = Task(o.getString("id"), o.getString("url"), o.getString("t"), o.optString("th").ifEmpty { null },
                     o.getBoolean("a"), o.getInt("h"), o.getBoolean("s"), o.getBoolean("p"))
                 t.uploader = o.optString("u").ifEmpty { null }; t.clipStart = o.optString("cs"); t.clipEnd = o.optString("ce")
+                t.thumbOnly = o.optBoolean("to"); t.expect = o.optLong("ex")
                 val saved = try { St.valueOf(o.getString("st")) } catch (_: Throwable) { St.Failed }
                 if (saved == St.Canceled || saved == St.Failed) {
                     t.st = saved; t.msg = o.optString("m")
@@ -991,7 +1086,8 @@ object Repo {
                 a.put(JSONObject().put("id", t.id).put("url", t.url).put("t", t.title).put("th", t.thumb ?: "")
                     .put("a", t.audio).put("h", t.height).put("s", t.subs).put("p", t.playlist)
                     .put("st", t.st.name).put("m", t.msg).put("wn", t.waitNet).put("wk", t.waitKind)
-                    .put("u", t.uploader ?: "").put("cs", t.clipStart).put("ce", t.clipEnd))
+                    .put("u", t.uploader ?: "").put("cs", t.clipStart).put("ce", t.clipEnd)
+                    .put("to", t.thumbOnly).put("ex", t.expect))
             }
             taskFile.writeText(a.toString())
         } catch (_: Throwable) {}
@@ -1064,7 +1160,11 @@ class DownloadService : Service() {
                     val act = Repo.tasks.filter { it.st == St.Running || it.st == St.Queued }
                     if (act.isEmpty() && waiting == 0) break
                     if (act.isEmpty()) nm.notify(1, build(0, "$waiting تحميل في الانتظار…"))
-                    else nm.notify(1, build((act.map { it.progress }.average() * 100).toInt(), "${act.size} تحميل"))
+                    else {
+                        val one = act.singleOrNull()
+                        val txt = if (one != null && one.st == St.Running && one.speed > 0L) briefOf(one) else "${act.size} تحميل"
+                        nm.notify(1, build((act.map { it.progress }.average() * 100).toInt(), txt))
+                    }
                     delay(1000)
                 }
                 looping = false
