@@ -79,9 +79,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.PathParser
-import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -208,7 +206,7 @@ fun AppTheme(content: @Composable () -> Unit) {
 }
 
 // ═══════════════════════════ الأيقونات ═══════════════════════════
-// المجموعة كلها في Icons.kt (object Ico)
+// المجموعة كلها في آخر الملف (object Ico)
 
 private val IcDownload get() = Ico.Download
 private val IcLink get() = Ico.Link
@@ -318,7 +316,8 @@ fun sz(bytes: Long, approx: Boolean): String {
     val t = when {
         mb >= 1024 -> String.format(java.util.Locale.US, "%.2f GB", mb / 1024)
         mb >= 100 -> String.format(java.util.Locale.US, "%.0f MB", mb)
-        else -> String.format(java.util.Locale.US, "%.1f MB", mb)
+        mb >= 1 -> String.format(java.util.Locale.US, "%.1f MB", mb)
+        else -> String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
     }
     return if (approx) "≈ $t" else t
 }
@@ -352,6 +351,10 @@ private fun SectionTitle(text: String, modifier: Modifier = Modifier) =
 private fun Footnote(text: String) =
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
+
+@Composable
+private fun Label(text: String) =
+    Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
 @Composable
 private fun SettingRow(icon: ImageVector?, title: String, sub: String? = null, subColor: Color = Color.Unspecified,
@@ -407,6 +410,53 @@ private fun Switcher(opts: List<String>, sel: Int, modifier: Modifier = Modifier
                 }
             }
         }
+    }
+}
+
+// تبويبات الرئيسية (فيديو / صوت / صورة): الحبّة بتنزلق تحت التبويب المختار
+private class ModeTab(val label: String, val icon: ImageVector)
+
+@Composable
+private fun ModeTabs(sel: Int, modifier: Modifier = Modifier, on: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val tabs = remember { listOf(ModeTab("فيديو", Ico.Play), ModeTab("صوت", Ico.Music), ModeTab("صورة", Ico.Image)) }
+    BoxWithConstraints(modifier.fillMaxWidth().height(60.dp).clip(RoundedCornerShape(30.dp))
+        .background(cs.surfaceContainerHigh).padding(5.dp)) {
+        val w = maxWidth / tabs.size
+        val x by animateDpAsState(w * sel.coerceIn(0, tabs.size - 1), spring(0.8f, 420f), label = "mt")
+        Box(Modifier.offset(x = x).width(w).fillMaxHeight().clip(RoundedCornerShape(25.dp)).background(cs.primaryContainer))
+        Row(Modifier.fillMaxSize()) {
+            tabs.forEachIndexed { i, t ->
+                val c by animateColorAsState(if (i == sel) cs.onPrimaryContainer else cs.onSurfaceVariant, label = "mtc")
+                Row(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(25.dp))
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { on(i) },
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Icon(t.icon, null, Modifier.size(20.dp), tint = c)
+                    Spacer(Modifier.width(8.dp))
+                    Text(t.label, color = c, style = MaterialTheme.typography.titleSmall)
+                }
+            }
+        }
+    }
+}
+
+// مجموعة خيارات بتتفتح وتتقفل، وتحت عنوانها ملخص للاختيار الحالي
+@Composable
+private fun OptGroup(title: String, summary: String, content: @Composable ColumnScope.() -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var open by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(cs.surfaceContainerLow).animateContentSize()) {
+        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(if (open) Ico.ChevronUp else Ico.ChevronDown, null, tint = cs.onSurfaceVariant)
+        }
+        if (open) Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
     }
 }
 
@@ -485,6 +535,12 @@ fun App() {
         } else lastSize = libSize
     }
     LaunchedEffect(tab) { if (tab == 1) unseen = 0 }
+
+    // تحميل صورة أو ترجمة بس مش بيدخل المكتبة، فبنقول للمستخدم إنه اتحفظ
+    val extrasTick = Repo.extrasTick.intValue
+    LaunchedEffect(extrasTick) {
+        if (extrasTick > 0) { snack.currentSnackbarData?.dismiss(); snack.showSnackbar(Repo.extrasMsg) }
+    }
 
     CompositionLocalProvider(LocalSnack provides snack) {
         Surface(Modifier.fillMaxSize(), color = cs.surface, contentColor = cs.onSurface) {
@@ -576,7 +632,7 @@ private fun HowTo(top: Dp = 36.dp) {
     val steps = listOf(
         "افتح الفيديو في يوتيوب أو إنستجرام أو فيسبوك أو تيك توك",
         "اضغط مشاركة واختار Grab، أو انسخ الرابط والصقه فوق",
-        "اختار الجودة أو الصوت واضغط تحميل"
+        "اختار النوع من التبويبات (فيديو أو صوت أو صورة) والجودة، واضغط تحميل"
     )
     Column(Modifier.fillMaxWidth().padding(top = top), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Text("إزاي تستخدمه؟", style = MaterialTheme.typography.titleLarge)
@@ -588,6 +644,148 @@ private fun HowTo(top: Dp = 36.dp) {
                 Text(t, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
             }
         }
+    }
+}
+
+// خيارات تبويب الفيديو: الجودة ظاهرة دايمًا، والباقي في مجموعات بتتفتح
+@Composable
+private fun VideoOptions(i: Info, h: Int, clipOn: Boolean, onH: (Int) -> Unit) {
+    val containers = listOf("MP4", "MKV", "WEBM")
+    val codecs = listOf("تلقائي", "H.264", "VP9", "AV1")
+    val fpsNames = listOf("بدون حد", "30", "60")
+    val fpsVals = listOf(0, 30, 60)
+    val thumbVals = listOf(0, 2, 3, 4)
+    val thumbNames = listOf("بدون", "مدمجة في الفيديو", "ملف منفصل", "مدمجة + منفصلة")
+    val imgFmts = listOf("jpg", "png", "webp")
+    val subNames = listOf("مدمجة في الفيديو", "ملف SRT منفصل", "مدمجة + منفصلة", "ترجمة فقط")
+    val subLangNames = listOf("عربي + EN", "عربي", "English", "الكل")
+    val subLangVals = listOf("ar.*,en.*", "ar.*", "en.*", "all,-live_chat")
+    val dubNames = listOf("الصوت الأصلي", "لغة مفضلة", "كل الأصوات")
+    val codes = listOf("ar", "en", "fr", "es", "de", "tr", "ru", "hi")
+    val langNames = listOf("عربي", "English", "Français", "Español", "Deutsch", "Türkçe", "Русский", "हिन्दी")
+    val tIdx = thumbVals.indexOf(Prefs.thumbMode).coerceAtLeast(0)
+    val extras = listOf(Prefs.chapters, Prefs.embedMeta, Prefs.saveDesc).count { it }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            QChip("الأفضل", "تلقائي", i.qs.firstOrNull()?.let { sz(it.bytes, it.approx) } ?: "", h == 0) { onH(0) }
+            i.qs.forEach { q -> QChip("${q.h}p", qTag(q.h), sz(q.bytes, q.approx), h == q.h) { onH(q.h) } }
+        }
+        if (i.qs.any { it.bytes > 0 }) Footnote(
+            if (clipOn) "الأحجام للفيديو كامل (فيديو + صوت)، والجزء المحدد هيبقى أصغر."
+            else "الحجم الحقيقي للفيديو + الصوت لكل جودة. «≈» يعني تقدير.")
+
+        OptGroup("الصيغة والمواصفات",
+            "${containers[Prefs.vFmt.coerceIn(0, 2)]} • ${codecs[Prefs.vCodec.coerceIn(0, 3)]}" +
+                (if (Prefs.fpsMax > 0) " • حتى ${Prefs.fpsMax} إطار" else "")) {
+            Label("صيغة الملف")
+            Choices(containers, Prefs.vFmt) { Prefs.vFmt = it; Prefs.save() }
+            Label("الكودك")
+            Choices(codecs, Prefs.vCodec) { Prefs.vCodec = it; Prefs.save() }
+            Label("أقصى عدد إطارات")
+            Choices(fpsNames, fpsVals.indexOf(Prefs.fpsMax).coerceAtLeast(0)) { Prefs.fpsMax = fpsVals[it]; Prefs.save() }
+            Footnote("H.264 أوسع توافقًا مع الأجهزة، وAV1 أصغر حجمًا لكن أبطأ في التشغيل. لو الكودك مش متاح بالجودة دي بيختار أقرب واحد.")
+        }
+
+        OptGroup("الصورة المصغّرة", thumbNames[tIdx] + if (tIdx >= 2) " • ${Prefs.thumbFmt.uppercase()}" else "") {
+            Choices(thumbNames, tIdx) { Prefs.thumbMode = thumbVals[it]; Prefs.save() }
+            if (Prefs.thumbMode == 3 || Prefs.thumbMode == 4) {
+                Label("صيغة الصورة المنفصلة")
+                Choices(imgFmts.map { it.uppercase() }, imgFmts.indexOf(Prefs.thumbFmt).coerceAtLeast(0)) { Prefs.thumbFmt = imgFmts[it]; Prefs.save() }
+            }
+            Footnote(when {
+                (Prefs.thumbMode == 2 || Prefs.thumbMode == 4) && Prefs.vFmt == 2 && Prefs.dubMode != 2 ->
+                    "WEBM مبيدعمش صورة مدمجة، اختار MP4 أو MKV عشان الدمج يشتغل."
+                Prefs.thumbMode == 2 -> "الصورة بتتدمج كغلاف جوه الفيديو (ممكن تزوّد وقت المعالجة شوية)."
+                Prefs.thumbMode == 3 -> "الصورة بتتحفظ كملف منفصل في مجلد الصور."
+                Prefs.thumbMode == 4 -> "الصورة مدمجة في الفيديو وكمان ملف منفصل في مجلد الصور."
+                else -> "من غير صور."
+            })
+        }
+
+        OptGroup("الترجمة", if (Prefs.subs) subNames[Prefs.subsMode.coerceIn(0, 3)] else "متوقفة") {
+            SettingRow(IcSubs, "تضمين الترجمة", onClick = { Prefs.subs = !Prefs.subs; Prefs.save() }) {
+                Toggle(Prefs.subs) { Prefs.subs = it; Prefs.save() }
+            }
+            if (Prefs.subs) {
+                Label("طريقة الترجمة")
+                Choices(subNames, Prefs.subsMode) { Prefs.subsMode = it; Prefs.save() }
+                Label("لغة الترجمة")
+                Choices(subLangNames, subLangVals.indexOf(Prefs.subLangs).coerceAtLeast(0)) { Prefs.subLangs = subLangVals[it]; Prefs.save() }
+                Footnote(when (Prefs.subsMode) {
+                    1 -> "الملف المنفصل بيتحمّل بعد الفيديو، فلو يوتيوب رفضه الفيديو بيتحمّل عادي."
+                    2 -> "الترجمة بتتدمج في الفيديو وبتتحفظ كمان كملف SRT."
+                    3 -> "بينزّل ملف الترجمة بس من غير الفيديو."
+                    else -> "الترجمة بتتدمج جوه ملف الفيديو."
+                } + " «الكل» ممكن يحمّل ملفات كتير.")
+            }
+        }
+
+        OptGroup("الصوت واللغة", dubNames[Prefs.dubMode.coerceIn(0, 2)] +
+            if (Prefs.dubMode == 1) " • ${langNames[codes.indexOf(Prefs.dubLang).coerceAtLeast(0)]}" else "") {
+            Choices(dubNames, Prefs.dubMode) { Prefs.dubMode = it; Prefs.save() }
+            if (Prefs.dubMode == 1) Choices(langNames, codes.indexOf(Prefs.dubLang)) { Prefs.dubLang = codes[it]; Prefs.save() }
+            Footnote(when (Prefs.dubMode) {
+                1 -> "لو الفيديو فيه صوت بلغتك المفضلة بيتحمّل بيه، وإلا بيتحمّل الأصلي."
+                2 -> "كل مسارات الصوت (الدبلجات) بتتدمج في ملف MKV وتختار منها وقت التشغيل."
+                else -> "الصوت الأصلي للفيديو."
+            })
+        }
+
+        OptGroup("إضافات", if (extras == 0) "مفيش" else "$extras مفعّلة") {
+            SettingRow(Ico.Library, "فصول الفيديو", "تضمين الفصول جوه الملف", onClick = { Prefs.chapters = !Prefs.chapters; Prefs.save() }) {
+                Toggle(Prefs.chapters) { Prefs.chapters = it; Prefs.save() }
+            }
+            SettingRow(Ico.Info, "بيانات الملف", "العنوان واسم القناة جوه الملف", onClick = { Prefs.embedMeta = !Prefs.embedMeta; Prefs.save() }) {
+                Toggle(Prefs.embedMeta) { Prefs.embedMeta = it; Prefs.save() }
+            }
+            SettingRow(IcSubs, "حفظ وصف الفيديو", "ملف نصي في مجلد Download", onClick = { Prefs.saveDesc = !Prefs.saveDesc; Prefs.save() }) {
+                Toggle(Prefs.saveDesc) { Prefs.saveDesc = it; Prefs.save() }
+            }
+        }
+    }
+}
+
+// خيارات تبويب الصوت
+@Composable
+private fun AudioOptions(i: Info) {
+    val fmts = listOf("mp3", "m4a", "opus", "flac")
+    val codes = listOf("ar", "en", "fr", "es", "de", "tr", "ru", "hi")
+    val langNames = listOf("عربي", "English", "Français", "Español", "Deutsch", "Türkçe", "Русский", "हिन्दी")
+    val a = i.audioEst(Prefs.audioFmt)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Label("الصيغة")
+        Switcher(fmts.map { it.uppercase() }, fmts.indexOf(Prefs.audioFmt)) { Prefs.audioFmt = fmts[it]; Prefs.save() }
+        Footnote(when {
+            Prefs.audioFmt == "flac" -> "FLAC من غير فقد في الجودة، فالحجم أكبر بكتير."
+            a.first > 0 -> "الحجم المتوقع ${sz(a.first, a.second)}"
+            else -> "الحجم هيتحدد وقت التحميل."
+        })
+        if (Prefs.audioFmt == "mp3") {
+            Label("جودة MP3")
+            Choices(listOf("320 kbps", "192 kbps", "128 kbps"), Prefs.audioQ) { Prefs.audioQ = it; Prefs.save() }
+        }
+        SettingRow(Ico.Image, "غلاف الألبوم", if (Prefs.audioFmt == "opus") "مش متاح مع OPUS" else "تضمين صورة الفيديو كغلاف للملف",
+            onClick = { Prefs.audioCover = !Prefs.audioCover; Prefs.save() }) {
+            Toggle(Prefs.audioCover) { Prefs.audioCover = it; Prefs.save() }
+        }
+        SettingRow(Ico.Info, "بيانات الملف", "العنوان واسم القناة جوه الملف", onClick = { Prefs.embedMeta = !Prefs.embedMeta; Prefs.save() }) {
+            Toggle(Prefs.embedMeta) { Prefs.embedMeta = it; Prefs.save() }
+        }
+        Label("لغة الصوت")
+        Choices(listOf("الصوت الأصلي", "لغة مفضلة"), Prefs.dubMode.coerceAtMost(1)) { Prefs.dubMode = it; Prefs.save() }
+        if (Prefs.dubMode == 1) Choices(langNames, codes.indexOf(Prefs.dubLang)) { Prefs.dubLang = codes[it]; Prefs.save() }
+    }
+}
+
+// خيارات تبويب الصورة
+@Composable
+private fun ThumbOptions() {
+    val fm = listOf("jpg", "png", "webp")
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Label("صيغة الصورة")
+        Switcher(fm.map { it.uppercase() }, fm.indexOf(Prefs.thumbFmt)) { Prefs.thumbFmt = fm[it]; Prefs.save() }
+        Footnote("بتتحفظ بأعلى جودة متاحة في مجلد الصور. JPG أصغر حجمًا، وPNG من غير ضغط إضافي.")
     }
 }
 
@@ -607,9 +805,8 @@ fun HomeScreen(bottom: Dp) {
     var info by remember { mutableStateOf<Info?>(null) }
     var loading by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf("") }
-    var kind by remember { mutableIntStateOf(0) }
+    var mode by remember { mutableIntStateOf(Prefs.homeTab) }   // 0 فيديو، 1 صوت، 2 صورة
     var h by remember { mutableIntStateOf(0) }
-    var subs by remember { mutableStateOf(Prefs.subs) }
     var playlist by remember { mutableStateOf(false) }
     var dup by remember { mutableStateOf<Dup?>(null) }
     var pl by remember { mutableStateOf<PlInfo?>(null) }
@@ -630,20 +827,25 @@ fun HomeScreen(bottom: Dp) {
 
     BackHandler(enabled = info != null || pl != null) { if (pl != null) pl = null else info = null }
 
-    fun newTask(title: String, thumb: String?, pl: Boolean) =
-        Task(System.nanoTime().toString(), url.trim(), title, thumb, kind == 1, h, subs, pl)
+    fun pick(m: Int) { mode = m; Prefs.homeTab = m; Prefs.save(); err = "" }
+
+    fun mk(id: String, u: String, title: String, thumb: String?, q: Int, isPl: Boolean) =
+        Task(id, u, title, thumb, mode == 1, q, Prefs.subs && mode == 0, isPl).also { it.thumbOnly = mode == 2 }
+
+    // الصور مفيهاش منع تكرار
+    fun seen(u: String): Dup? = if (mode == 2) null else Repo.dupOf(u, mode == 1)
 
     fun added() {
         scope.launch {
             snack.currentSnackbarData?.dismiss()
             launch { listState.animateScrollToItem(0) }
-            snack.showSnackbar("بدأ التحميل", duration = SnackbarDuration.Short)
+            snack.showSnackbar(if (mode == 2) "بدأ حفظ الصورة" else "بدأ التحميل", duration = SnackbarDuration.Short)
         }
     }
 
     fun direct() {
         val u = url.trim(); if (u.isEmpty()) return
-        Repo.enqueue(ctx, newTask(u, null, playlist)); url = ""; err = ""; info = null; added()
+        Repo.enqueue(ctx, mk(System.nanoTime().toString(), u, u, null, 0, playlist)); url = ""; err = ""; info = null; added()
     }
 
     fun go() {
@@ -652,8 +854,8 @@ fun HomeScreen(bottom: Dp) {
         Incoming.clip.value?.let { if (u.contains(it)) { Prefs.lastClip = it; Incoming.clip.value = null } }
         val all = urlsOf(u)
         if (all.size > 1) {   // دفعة روابط: كلها تتضاف للتحميل مباشرة (بنتخطى اللي اتحمّل قبل كده)
-            val fresh = all.filter { Repo.dupOf(it, kind == 1) == null }
-            fresh.forEachIndexed { n, l -> Repo.enqueue(ctx, Task("${System.nanoTime()}_$n", l, l, null, kind == 1, 0, Prefs.subs, false)) }
+            val fresh = all.filter { seen(it) == null }
+            fresh.forEachIndexed { n, l -> Repo.enqueue(ctx, mk("${System.nanoTime()}_$n", l, l, null, 0, false)) }
             url = ""; err = ""; info = null
             val skipped = all.size - fresh.size
             val m = when {
@@ -664,7 +866,7 @@ fun HomeScreen(bottom: Dp) {
             scope.launch { snack.currentSnackbarData?.dismiss(); snack.showSnackbar(m) }
             return
         }
-        if (!playlist && !skipDup) { Repo.dupOf(u, kind == 1)?.let { dup = it; return } }
+        if (!playlist && !skipDup) { seen(u)?.let { dup = it; return } }
         skipDup = false
         focus.clearFocus()
         err = ""; info = null; pl = null
@@ -694,6 +896,7 @@ fun HomeScreen(bottom: Dp) {
     }) {
         PageList(bottom, listState) {
             item { Box(Modifier.animateContentSize()) { HomeHero(compact) } }
+            item { ModeTabs(mode, Modifier.padding(bottom = 16.dp)) { pick(it) } }
             clipLink?.let { cl ->
                 if (url.isBlank() && info == null) item {
                     Row(Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RoundedCornerShape(28.dp))
@@ -759,7 +962,7 @@ fun HomeScreen(bottom: Dp) {
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton({ go() }) { Text("حاول تاني") }
-                        TextButton({ direct() }) { Text("حمّل مباشرة") }
+                        TextButton({ direct() }) { Text(if (mode == 2) "احفظ مباشرة" else "حمّل مباشرة") }
                     }
                 }
             }
@@ -771,7 +974,7 @@ fun HomeScreen(bottom: Dp) {
                         Box {
                             Thumb(i.thumbnail, Modifier.fillMaxWidth().aspectRatio(16 / 9f)
                                 .clip(RoundedCornerShape(32.dp)).background(cs.surfaceContainerHigh))
-                            if (dur.isNotEmpty()) Box(Modifier.align(Alignment.BottomEnd).padding(14.dp).clip(CircleShape)
+                            if (dur.isNotEmpty() && mode != 2) Box(Modifier.align(Alignment.BottomEnd).padding(14.dp).clip(CircleShape)
                                 .background(Color.Black.copy(alpha = 0.65f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
                                 Text(dur, color = Color.White, style = MaterialTheme.typography.labelLarge)
                             }
@@ -781,34 +984,32 @@ fun HomeScreen(bottom: Dp) {
                             if (!i.uploader.isNullOrEmpty()) Text(i.uploader ?: "", style = MaterialTheme.typography.bodyMedium,
                                 color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Switcher(listOf("فيديو", "صوت"), kind) { kind = it }
-                        if (kind == 0) {
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                QChip("الأفضل", "تلقائي", i.qs.firstOrNull()?.let { sz(it.bytes, it.approx) } ?: "", h == 0) { h = 0 }
-                                i.qs.forEach { q -> QChip("${q.h}p", qTag(q.h), sz(q.bytes, q.approx), h == q.h) { h = q.h } }
+                        when (mode) {
+                            0 -> VideoOptions(i, h, clipOn) { h = it }
+                            1 -> AudioOptions(i)
+                            else -> ThumbOptions()
+                        }
+                        if (mode != 2) {
+                            SettingRow(Ico.Scissors, "تحميل جزء فقط", "حدّد بداية ونهاية المقطع", onClick = { clipOn = !clipOn }) { Toggle(clipOn) { clipOn = it } }
+                            if (clipOn) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(clipFrom, { clipFrom = it.filter { c -> c.isDigit() || c == ':' } }, Modifier.weight(1f),
+                                    label = { Text("من (0:30)") }, singleLine = true)
+                                OutlinedTextField(clipTo, { clipTo = it.filter { c -> c.isDigit() || c == ':' } }, Modifier.weight(1f),
+                                    label = { Text("إلى (1:45)") }, singleLine = true)
                             }
-                            if (i.qs.any { it.bytes > 0 }) Footnote(
-                                if (clipOn) "الأحجام للفيديو كامل (فيديو + صوت)، والجزء المحدد هيبقى أصغر."
-                                else "الحجم الحقيقي للفيديو + الصوت لكل جودة. «≈» يعني تقدير.")
-                            SettingRow(IcSubs, "تضمين الترجمة", onClick = { subs = !subs }) { Toggle(subs) { subs = it } }
-                        } else {
-                            val a = i.audioEst(Prefs.audioFmt)
-                            SettingRow(IcMusic, "الصيغة: ${Prefs.audioFmt.uppercase()}",
-                                (if (a.first > 0) "الحجم ${sz(a.first, a.second)} • " else "") + "الصيغة تتغير من الإعدادات")
                         }
-                        SettingRow(Ico.Scissors, "تحميل جزء فقط", "حدّد بداية ونهاية المقطع", onClick = { clipOn = !clipOn }) { Toggle(clipOn) { clipOn = it } }
-                        if (clipOn) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedTextField(clipFrom, { clipFrom = it.filter { c -> c.isDigit() || c == ':' } }, Modifier.weight(1f),
-                                label = { Text("من (0:30)") }, singleLine = true)
-                            OutlinedTextField(clipTo, { clipTo = it.filter { c -> c.isDigit() || c == ':' } }, Modifier.weight(1f),
-                                label = { Text("إلى (1:45)") }, singleLine = true)
-                        }
-                        BigButton("تحميل", icon = IcDownload) {
+                        BigButton(if (mode == 2) "حفظ الصورة" else "تحميل", icon = IcDownload) {
                             hap.performHapticFeedback(HapticFeedbackType.LongPress)
-                            Repo.enqueue(ctx, newTask(i.title ?: url, i.thumbnail, false).also { tk ->
-                                tk.uploader = i.uploader
-                                if (clipOn && (clipFrom.isNotBlank() || clipTo.isNotBlank())) { tk.clipStart = clipFrom; tk.clipEnd = clipTo }
-                            })
+                            val tk = mk(System.nanoTime().toString(), url.trim(), i.title ?: url, i.thumbnail, h, false)
+                            tk.uploader = i.uploader
+                            val clipped = mode != 2 && clipOn && (clipFrom.isNotBlank() || clipTo.isNotBlank())
+                            if (clipped) { tk.clipStart = clipFrom; tk.clipEnd = clipTo }
+                            else tk.expect = when (mode) {
+                                0 -> (i.qs.firstOrNull { it.h == h } ?: i.qs.firstOrNull())?.bytes ?: 0L
+                                1 -> i.audioBytes
+                                else -> 0L
+                            }
+                            Repo.enqueue(ctx, tk)
                             info = null; url = ""; clipOn = false; clipFrom = ""; clipTo = ""; added()
                         }
                     }
@@ -819,7 +1020,8 @@ fun HomeScreen(bottom: Dp) {
                 item {
                     Column(Modifier.padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(p.title.ifEmpty { "قائمة تشغيل" }, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("${plSel.size} من ${p.entries.size} محدد", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        Text("${plSel.size} من ${p.entries.size} محدد • النوع: ${listOf("فيديو", "صوت", "صورة")[mode]}",
+                            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             FilterChip(plSel.size == p.entries.size, { plSel = if (plSel.size == p.entries.size) emptySet() else p.entries.indices.toSet() },
                                 { Text("تحديد الكل") })
@@ -833,13 +1035,12 @@ fun HomeScreen(bottom: Dp) {
                                 plSel = (a until b).toSet()
                             }) { Text("حدّد") }
                         }
-                        Switcher(listOf("فيديو", "صوت"), kind) { kind = it }
-                        BigButton("حمّل المحدد (${plSel.size})", icon = IcDownload, enabled = plSel.isNotEmpty()) {
+                        BigButton((if (mode == 2) "احفظ صور المحدد (" else "حمّل المحدد (") + "${plSel.size})", icon = IcDownload, enabled = plSel.isNotEmpty()) {
                             hap.performHapticFeedback(HapticFeedbackType.LongPress)
                             val chosen = p.entries.filterIndexed { n, _ -> n in plSel }
-                            val fresh = chosen.filter { Repo.dupOf(it.url, kind == 1) == null }
+                            val fresh = chosen.filter { seen(it.url) == null }
                             fresh.forEachIndexed { n, e ->
-                                Repo.enqueue(ctx, Task("${System.nanoTime()}_$n", e.url, e.title, e.thumb, kind == 1, 0, Prefs.subs, false))
+                                Repo.enqueue(ctx, mk("${System.nanoTime()}_$n", e.url, e.title, e.thumb, 0, false))
                             }
                             val skipped = chosen.size - fresh.size
                             pl = null; url = ""; err = ""
@@ -932,46 +1133,66 @@ private fun QChip(top: String, sub: String, size: String, sel: Boolean, onClick:
     }
 }
 
+// تفاصيل التحميل الشغّال: اللي نزل من الإجمالي، السرعة، المتبقي، والوقت بالدقايق
+@Composable
+private fun TaskStats(t: Task) {
+    val cs = MaterialTheme.colorScheme
+    val left = (t.total - t.done).coerceAtLeast(0L)
+    val line1 = "${sz(t.done, false)} من ${sz(t.total, false)}"
+    val line2 = listOfNotNull(
+        if (t.speed > 0L) sz(t.speed, false) + "/s" else null,
+        if (left > 0L) "المتبقي ${sz(left, false)}" else null,
+        etaText(t.eta).takeIf { it.isNotEmpty() }?.let { "باقي $it" }
+    ).joinToString("  •  ")
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cs.surfaceContainerLow)
+        .padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(line1, style = MaterialTheme.typography.labelLarge)
+        if (line2.isNotEmpty()) Text(line2, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+    }
+}
+
 @Composable
 fun TaskRow(t: Task, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     val p by animateFloatAsState(t.progress, label = "prog")
-    Row(modifier.fillMaxWidth().padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Thumb(t.thumb, Modifier.size(72.dp).clip(RoundedCornerShape(24.dp)).background(cs.surfaceContainerHigh))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+    Column(modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Thumb(t.thumb, Modifier.size(72.dp).clip(RoundedCornerShape(24.dp)).background(cs.surfaceContainerHigh))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                when (t.st) {
+                    St.Running -> WavyBar(if (t.progress > 0f && t.progress < 0.995f) p else null)
+                    St.Queued -> WavyBar(0f)
+                    else -> {}
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (t.st == St.Done) Icon(Ico.CheckCircle, null, Modifier.size(18.dp), tint = cs.tertiary)
+                    Text(when (t.st) {
+                        St.Queued -> "في الانتظار"
+                        St.Running -> if (t.msg.isNotEmpty() && (t.progress == 0f || t.progress >= 0.995f)) t.msg else "${(t.progress * 100).toInt()}%"
+                        St.Failed -> t.msg
+                        St.Canceled -> t.msg.ifEmpty { "أُلغي" }
+                        St.Done -> "تم التحميل"
+                    }, style = MaterialTheme.typography.labelLarge,
+                        color = when (t.st) { St.Failed -> cs.error; St.Done -> cs.tertiary; else -> cs.onSurfaceVariant },
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
             when (t.st) {
-                St.Running -> WavyBar(if (t.progress > 0f && t.progress < 0.995f) p else null)
-                St.Queued -> WavyBar(0f)
+                St.Running, St.Queued -> Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (t.st == St.Queued) IconButton({ Repo.startNow(ctx, t) }) { Icon(Ico.Play, "ابدأ الآن") }
+                    IconButton({ Repo.pause(t) }) { Icon(IcPause, "إيقاف مؤقت") }
+                    FilledTonalIconButton({ Repo.cancel(t) }) { Icon(Ico.Close, "إلغاء") }
+                }
+                St.Failed, St.Canceled -> Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    FilledTonalIconButton({ if (t.waitNet) Repo.startNow(ctx, t) else Repo.enqueue(ctx, t) }) { Icon(Ico.Refresh, "إعادة") }
+                    IconButton({ Repo.drop(t) }) { Icon(Ico.Delete, "حذف") }
+                }
                 else -> {}
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (t.st == St.Done) Icon(Ico.CheckCircle, null, Modifier.size(18.dp), tint = cs.tertiary)
-                Text(when (t.st) {
-                    St.Queued -> "في الانتظار"
-                    St.Running -> if (t.msg.isNotEmpty() && (t.progress == 0f || t.progress >= 0.995f)) t.msg else "${(t.progress * 100).toInt()}%" + if (t.eta > 0) " • باقي ${t.eta}ث" else ""
-                    St.Failed -> t.msg
-                    St.Canceled -> t.msg.ifEmpty { "أُلغي" }
-                    St.Done -> "تم التحميل"
-                }, style = MaterialTheme.typography.labelLarge,
-                    color = when (t.st) { St.Failed -> cs.error; St.Done -> cs.tertiary; else -> cs.onSurfaceVariant },
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
         }
-        when (t.st) {
-            St.Running, St.Queued -> Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (t.st == St.Queued) IconButton({ Repo.startNow(ctx, t) }) { Icon(Ico.Play, "ابدأ الآن") }
-                IconButton({ Repo.pause(t) }) { Icon(IcPause, "إيقاف مؤقت") }
-                FilledTonalIconButton({ Repo.cancel(t) }) { Icon(Ico.Close, "إلغاء") }
-            }
-            St.Failed, St.Canceled -> Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                FilledTonalIconButton({ if (t.waitNet) Repo.startNow(ctx, t) else Repo.enqueue(ctx, t) }) { Icon(Ico.Refresh, "إعادة") }
-                IconButton({ Repo.drop(t) }) { Icon(Ico.Delete, "حذف") }
-            }
-            else -> {}
-        }
+        if (t.st == St.Running && t.done > 0L && t.total > 0L) TaskStats(t)
     }
 }
 
@@ -1120,6 +1341,7 @@ fun LibraryScreen(bottom: Dp) {
 }
 
 // ═══════════════════════════ الإعدادات ═══════════════════════════
+// الشاشة الرئيسية قايمة أقسام، وكل قسم بيفتح صفحته لوحده
 
 @Composable
 private fun HourStepper(label: String, h: Int, modifier: Modifier = Modifier, on: (Int) -> Unit) {
@@ -1136,7 +1358,69 @@ private fun HourStepper(label: String, h: Int, modifier: Modifier = Modifier, on
 }
 
 @Composable
+private fun HubRow(icon: ImageVector, title: String, sub: String, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).clip(RoundedCornerShape(28.dp))
+        .background(cs.surfaceContainerLow).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.secondaryContainer), contentAlignment = Alignment.Center) {
+            Icon(icon, null, Modifier.size(22.dp), tint = cs.onSecondaryContainer)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(sub, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(if (rtl) Ico.ChevronL else Ico.ChevronR, null, tint = cs.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun PageHeader(title: String, onBack: () -> Unit) {
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    Row(Modifier.statusBarsPadding().padding(top = 16.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        IconButton(onBack) { Icon(if (rtl) Ico.ArrowRight else Ico.ArrowLeft, "رجوع") }
+        Text(title, style = MaterialTheme.typography.headlineMedium)
+    }
+}
+
+private val PageTitles = listOf("التحميل", "الحفظ والملفات", "الجدولة", "المظهر", "الحسابات والكوكيز", "المحرك", "عن التطبيق")
+
+@Composable
 fun SettingsScreen(bottom: Dp) {
+    var page by rememberSaveable { mutableIntStateOf(-1) }
+    BackHandler(enabled = page != -1) { page = -1 }
+    Crossfade(page, Modifier.fillMaxSize(), label = "settings") { p ->
+        if (p == -1) SettingsHub(bottom) { page = it } else SettingsPage(p, bottom) { page = -1 }
+    }
+}
+
+@Composable
+private fun SettingsHub(bottom: Dp, open: (Int) -> Unit) {
+    val ready by Repo.ready
+    val st by Repo.status
+    var ver by remember { mutableStateOf("") }
+    LaunchedEffect(ready, st) { if (ready) ver = withContext(Dispatchers.IO) { Repo.version() } }
+    val themeName = listOf("تلقائي", "فاتح", "داكن")[Prefs.theme.coerceIn(0, 2)]
+    val summaries = listOf(
+        "${Prefs.concurrent} تحميل متزامن" + (if (Prefs.wifiOnly) " • واي فاي فقط" else "") + (if (Prefs.limit > 0) " • حد ${Prefs.limit}MB/s" else ""),
+        if (Prefs.treeUri.isEmpty()) "Movies / Music ‹ ${Prefs.folder}" else "مجلد مخصص",
+        if (Prefs.schedOn) "من ${Prefs.schedFrom}:00 إلى ${Prefs.schedTo}:00" else if (Prefs.chargingOnly) "وقت الشحن فقط" else "متوقفة",
+        themeName,
+        if (Repo.cookieSites.isEmpty()) "مفيش مواقع مسجّلة" else "${Repo.cookieSites.size} موقع مسجّل دخوله",
+        if (ver.isNotEmpty()) "yt-dlp $ver" else "yt-dlp",
+        "طريقة الاستخدام"
+    )
+    val icons = listOf(Ico.Download, Ico.Folder, Ico.Clock, Ico.Sun, Ico.Cookie, Ico.Terminal, Ico.Info)
+    PageList(bottom) {
+        item { Header("الإعدادات") }
+        itemsIndexed(PageTitles) { n, t -> HubRow(icons[n], t, summaries[n]) { open(n) } }
+    }
+}
+
+@Composable
+private fun SettingsPage(p: Int, bottom: Dp, back: () -> Unit) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     val ready by Repo.ready
@@ -1147,11 +1431,10 @@ fun SettingsScreen(bottom: Dp) {
     var howDialog by remember { mutableStateOf(false) }
     val sites = Repo.cookieSites
     LaunchedEffect(ready, st) { if (ready) ver = withContext(Dispatchers.IO) { Repo.version() } }
+    val appVer = remember { try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" } catch (_: Throwable) { "" } }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) ckMsg = if (Repo.importCookies(u)) "تم استيراد الكوكيز ✓" else "الملف مش بصيغة cookies.txt صحيحة"
     }
-    val fmts = listOf("mp3", "m4a", "opus")
-    val subOpts = listOf("ar.*,en.*", "ar.*", "en.*", "all,-live_chat")
     val treePick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { u ->
         if (u != null) {
             try {
@@ -1162,221 +1445,163 @@ fun SettingsScreen(bottom: Dp) {
     }
 
     PageList(bottom) {
-        item { Header("الإعدادات") }
-
-        item { SectionTitle("التحميل", Modifier.padding(top = 0.dp)) }
-        item {
-            SettingRow(IcWifi, "الواي فاي فقط", "ما تستهلكش باقة الموبايل", onClick = { Prefs.wifiOnly = !Prefs.wifiOnly; Prefs.save() }) {
-                Toggle(Prefs.wifiOnly) { Prefs.wifiOnly = it; Prefs.save() }
-            }
-        }
-        item {
-            SettingRow(IcSubs, "الترجمة افتراضيًا", "تضمين الترجمة في كل تحميل", onClick = { Prefs.subs = !Prefs.subs; Prefs.save() }) {
-                Toggle(Prefs.subs) { Prefs.subs = it; Prefs.save() }
-            }
-        }
-        item {
-            SettingRow(Ico.Share, "تحميل سريع من المشاركة", "لما تشارك رابط يبدأ التحميل فورًا بدون نافذة اختيار", onClick = { Prefs.shareQuick = !Prefs.shareQuick; Prefs.save() }) {
-                Toggle(Prefs.shareQuick) { Prefs.shareQuick = it; Prefs.save() }
-            }
-        }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SettingRow(IcMusic, "صيغة الصوت")
-                Switcher(fmts.map { it.uppercase() }, fmts.indexOf(Prefs.audioFmt)) { Prefs.audioFmt = fmts[it]; Prefs.save() }
-            }
-        }
-        item {
-            val lims = listOf(0, 1, 2, 5)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SettingRow(IcDownload, "حد السرعة", "عشان التحميل ما ياكلش النت كله")
-                Switcher(listOf("بدون", "1MB/s", "2MB/s", "5MB/s"), lims.indexOf(Prefs.limit).coerceAtLeast(0)) { Prefs.limit = lims[it]; Prefs.save() }
-            }
-        }
-        item {
-            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingRow(IcSubs, "طريقة الترجمة")
-                Choices(listOf("مدمجة في الفيديو", "ملف SRT منفصل", "مدمجة + منفصلة", "ترجمة فقط"), Prefs.subsMode) { Prefs.subsMode = it; Prefs.save() }
-                Footnote(when (Prefs.subsMode) {
-                    1 -> "الملف المنفصل بيتحمّل بعد الفيديو، فلو يوتيوب رفضه الفيديو بيتحمّل عادي."
-                    2 -> "الترجمة بتتدمج في الفيديو وبتتحفظ كمان كملف SRT."
-                    3 -> "بينزّل ملف الترجمة بس من غير الفيديو (لما تفعّل «تضمين الترجمة»)."
-                    else -> "الترجمة بتتدمج جوه ملف الفيديو."
-                })
-            }
-        }
-        item {
-            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SettingRow(IcSubs, "لغة الترجمة")
-                Switcher(listOf("عربي + EN", "عربي", "English", "الكل"), subOpts.indexOf(Prefs.subLangs)) { Prefs.subLangs = subOpts[it]; Prefs.save() }
-                Footnote("«الكل» ممكن يحمّل ملفات كتير.")
-            }
-        }
-        item {
-            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SettingRow(IcDownload, "شكل اسم الملف")
-                Switcher(listOf("العنوان", "القناة", "التاريخ", "المعرّف"), Prefs.nameTpl) { Prefs.nameTpl = it; Prefs.save() }
-                Footnote(when (Prefs.nameTpl) {
-                    1 -> "القناة - العنوان"; 2 -> "2025-01-31 - العنوان"; 3 -> "العنوان [معرّف الفيديو]"; else -> "العنوان فقط"
-                })
-            }
-        }
-        item {
-            SettingRow(IcMusic, "غلاف وبيانات الصوت", "تضمين الصورة واسم القناة داخل الملف (MP3 وM4A)", onClick = { Prefs.embedMeta = !Prefs.embedMeta; Prefs.save() }) {
-                Toggle(Prefs.embedMeta) { Prefs.embedMeta = it; Prefs.save() }
-            }
-        }
-        item {
-            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingRow(Ico.Library, "صورة الفيديو")
-                Choices(listOf("بدون", "الصورة فقط", "مدمجة في الفيديو", "ملف منفصل", "مدمجة + منفصلة"), Prefs.thumbMode) { Prefs.thumbMode = it; Prefs.save() }
-                Footnote(when (Prefs.thumbMode) {
-                    1 -> "بينزّل الصورة بس (في Pictures) من غير الفيديو."
-                    2 -> "الصورة بتتدمج كغلاف جوه الفيديو (ممكن تزوّد وقت المعالجة شوية)."
-                    3 -> "الفيديو + صورته كملف منفصل في Pictures."
-                    4 -> "الصورة مدمجة في الفيديو وكمان ملف منفصل في Pictures."
-                    else -> "من غير صور."
-                })
-            }
-        }
-        item {
-            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingRow(IcMusic, "الدبلجة ولغة الصوت")
-                Choices(listOf("الصوت الأصلي", "لغة مفضلة", "كل الأصوات"), Prefs.dubMode) { Prefs.dubMode = it; Prefs.save() }
-                if (Prefs.dubMode == 1) {
-                    val codes = listOf("ar", "en", "fr", "es", "de", "tr", "ru", "hi")
-                    Choices(listOf("عربي", "English", "Français", "Español", "Deutsch", "Türkçe", "Русский", "हिन्दी"),
-                        codes.indexOf(Prefs.dubLang)) { Prefs.dubLang = codes[it]; Prefs.save() }
+        item { PageHeader(PageTitles[p], back) }
+        when (p) {
+            0 -> {
+                item {
+                    SettingRow(IcWifi, "الواي فاي فقط", "ما تستهلكش باقة الموبايل", onClick = { Prefs.wifiOnly = !Prefs.wifiOnly; Prefs.save() }) {
+                        Toggle(Prefs.wifiOnly) { Prefs.wifiOnly = it; Prefs.save() }
+                    }
                 }
-                Footnote(when (Prefs.dubMode) {
-                    1 -> "لو الفيديو فيه صوت بلغتك المفضلة بيتحمّل بيه، وإلا بيتحمّل الأصلي."
-                    2 -> "كل مسارات الصوت (الدبلجات) بتتدمج في ملف MKV وتختار منها وقت التشغيل."
-                    else -> "الصوت الأصلي للفيديو."
-                })
-            }
-        }
-        item {
-            SettingRow(IcSubs, "حفظ وصف الفيديو", "ملف نصي في Download", onClick = { Prefs.saveDesc = !Prefs.saveDesc; Prefs.save() }) {
-                Toggle(Prefs.saveDesc) { Prefs.saveDesc = it; Prefs.save() }
-            }
-        }
-
-        item { SectionTitle("مكان الحفظ") }
-        item {
-            SettingRow(Ico.Folder, "مجلد مخصص", if (Prefs.treeUri.isEmpty()) "الافتراضي: Movies / Music"
-                else Uri.decode(Uri.parse(Prefs.treeUri).lastPathSegment ?: Prefs.treeUri)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    FilledTonalButton({ treePick.launch(null) }) { Text("اختيار") }
-                    if (Prefs.treeUri.isNotEmpty()) TextButton({ Prefs.treeUri = ""; Prefs.save() }) { Text("إلغاء", color = cs.error) }
+                item {
+                    SettingRow(Ico.Share, "تحميل سريع من المشاركة", "لما تشارك رابط يبدأ التحميل فورًا بدون نافذة اختيار",
+                        onClick = { Prefs.shareQuick = !Prefs.shareQuick; Prefs.save() }) {
+                        Toggle(Prefs.shareQuick) { Prefs.shareQuick = it; Prefs.save() }
+                    }
                 }
+                item {
+                    Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SettingRow(IcLayers, "تحميلات متزامنة", "كام ملف يتحمّلوا في نفس الوقت")
+                        Switcher(listOf("1", "2", "3"), Prefs.concurrent - 1) { Prefs.concurrent = it + 1; Prefs.save() }
+                    }
+                }
+                item {
+                    val lims = listOf(0, 1, 2, 5)
+                    Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SettingRow(IcDownload, "حد السرعة", "عشان التحميل ما ياكلش النت كله")
+                        Switcher(listOf("بدون", "1MB/s", "2MB/s", "5MB/s"), lims.indexOf(Prefs.limit).coerceAtLeast(0)) { Prefs.limit = lims[it]; Prefs.save() }
+                    }
+                }
+                item { Footnote("خيارات الفيديو والصوت والصورة (الجودة، الترجمة، الصيغة…) من التبويبات في الرئيسية.") }
             }
-        }
-        if (Prefs.treeUri.isEmpty()) item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(Prefs.folder, { Prefs.folder = it.filter { c -> c != '/' && c != '\\' }.take(30); Prefs.save() },
-                    Modifier.fillMaxWidth(), label = { Text("اسم المجلد (داخل Movies / Music)") }, singleLine = true)
-            }
-        }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Switcher(listOf("عادي", "حسب الموقع", "حسب القناة"), Prefs.organize) { Prefs.organize = it; Prefs.save() }
-                Footnote("حسب الموقع: YouTube / Instagram… وحسب القناة: مجلد باسم صاحب الفيديو.")
-            }
-        }
-        item {
-            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SettingRow(IcLayers, "تحميلات متزامنة")
-                Switcher(listOf("1", "2", "3"), Prefs.concurrent - 1) { Prefs.concurrent = it + 1; Prefs.save() }
-            }
-        }
 
-        item { SectionTitle("الجدولة") }
-        item {
-            SettingRow(Ico.Clock, "تحميل في ساعات معينة", "التحميلات بتستنى لحد الموعد وبتبدأ لوحدها", onClick = { Prefs.schedOn = !Prefs.schedOn; Prefs.save() }) {
-                Toggle(Prefs.schedOn) { Prefs.schedOn = it; Prefs.save() }
-            }
-        }
-        if (Prefs.schedOn) item {
-            Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HourStepper("من", Prefs.schedFrom, Modifier.weight(1f)) { Prefs.schedFrom = it; Prefs.save() }
-                HourStepper("إلى", Prefs.schedTo, Modifier.weight(1f)) { Prefs.schedTo = it; Prefs.save() }
-            }
-        }
-        item {
-            SettingRow(Ico.Zap, "وقت الشحن فقط", "ما يحمّلش إلا والموبايل على الشاحن", onClick = { Prefs.chargingOnly = !Prefs.chargingOnly; Prefs.save() }) {
-                Toggle(Prefs.chargingOnly) { Prefs.chargingOnly = it; Prefs.save() }
-            }
-        }
-        item { Footnote("لبدء ملف فورًا اضغط ▶ جنبه. لو النظام قفل الخدمة، التحميلات المنتظرة بتكمّل لما تفتح التطبيق.") }
-
-        item { SectionTitle("المظهر") }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Switcher(listOf("تلقائي", "فاتح", "داكن"), Prefs.theme) { Prefs.theme = it; Prefs.save() }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    for (a in 0..5) {
-                        val c = if (a == 0) cs.surfaceContainerHighest else AccentDots[a - 1]
-                        Box(Modifier.size(46.dp).clip(CircleShape).background(c)
-                            .then(if (Prefs.accent == a) Modifier.border(3.dp, cs.onSurface, CircleShape) else Modifier)
-                            .clickable { Prefs.accent = a; Prefs.save() }, contentAlignment = Alignment.Center) {
-                            if (a == 0) Text("A", style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
-                            else if (Prefs.accent == a) Icon(Ico.Check, null, tint = Color.White)
+            1 -> {
+                item {
+                    SettingRow(Ico.Folder, "مجلد مخصص", if (Prefs.treeUri.isEmpty()) "الافتراضي: Movies / Music"
+                        else Uri.decode(Uri.parse(Prefs.treeUri).lastPathSegment ?: Prefs.treeUri)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            FilledTonalButton({ treePick.launch(null) }) { Text("اختيار") }
+                            if (Prefs.treeUri.isNotEmpty()) TextButton({ Prefs.treeUri = ""; Prefs.save() }) { Text("إلغاء", color = cs.error) }
                         }
                     }
                 }
-                Footnote("«A» = ألوان خلفية الموبايل (أندرويد 12 وأحدث).")
-            }
-        }
-
-        item { SectionTitle("المحرك") }
-        item {
-            SettingRow(IcEngine, "yt-dlp", if (st.isNotEmpty()) st else if (ver.isNotEmpty()) "الإصدار $ver" else "—") {
-                Box(Modifier.clip(CircleShape).background(cs.primaryContainer).clickable { Repo.update() }
-                    .padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Ico.Refresh, null, Modifier.size(18.dp), tint = cs.onPrimaryContainer)
-                        Text("تحديث", color = cs.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                if (Prefs.treeUri.isEmpty()) item {
+                    OutlinedTextField(Prefs.folder, { Prefs.folder = it.filter { c -> c != '/' && c != '\\' }.take(30); Prefs.save() },
+                        Modifier.fillMaxWidth(), label = { Text("اسم المجلد (داخل Movies / Music)") }, singleLine = true)
+                }
+                item {
+                    Column(Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingRow(Ico.Layers, "تنظيم الملفات")
+                        Switcher(listOf("عادي", "حسب الموقع", "حسب القناة"), Prefs.organize) { Prefs.organize = it; Prefs.save() }
+                        Footnote("حسب الموقع: YouTube / Instagram… وحسب القناة: مجلد باسم صاحب الفيديو.")
+                    }
+                }
+                item {
+                    Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SettingRow(IcDownload, "شكل اسم الملف")
+                        Switcher(listOf("العنوان", "القناة", "التاريخ", "المعرّف"), Prefs.nameTpl) { Prefs.nameTpl = it; Prefs.save() }
+                        Footnote(when (Prefs.nameTpl) {
+                            1 -> "القناة - العنوان"; 2 -> "2025-01-31 - العنوان"; 3 -> "العنوان [معرّف الفيديو]"; else -> "العنوان فقط"
+                        })
                     }
                 }
             }
-        }
-        item { Footnote("بيتحدّث تلقائيًا كل 24 ساعة، وكمان لو التحميل فشل.") }
 
-        item { SectionTitle("المتصفح الصغير والكوكيز") }
-        item {
-            SettingRow(Ico.Globe, "المتصفح الصغير", "سجّل دخول في أي موقع (يوتيوب، فيسبوك، إنستجرام…) والكوكيز بتتحفظ لـ Grab",
-                onClick = { ctx.startActivity(Intent(ctx, LoginActivity::class.java)) }) {
-                FilledTonalButton({ ctx.startActivity(Intent(ctx, LoginActivity::class.java)) }) { Text("فتح") }
+            2 -> {
+                item {
+                    SettingRow(Ico.Clock, "تحميل في ساعات معينة", "التحميلات بتستنى لحد الموعد وبتبدأ لوحدها", onClick = { Prefs.schedOn = !Prefs.schedOn; Prefs.save() }) {
+                        Toggle(Prefs.schedOn) { Prefs.schedOn = it; Prefs.save() }
+                    }
+                }
+                if (Prefs.schedOn) item {
+                    Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HourStepper("من", Prefs.schedFrom, Modifier.weight(1f)) { Prefs.schedFrom = it; Prefs.save() }
+                        HourStepper("إلى", Prefs.schedTo, Modifier.weight(1f)) { Prefs.schedTo = it; Prefs.save() }
+                    }
+                }
+                item {
+                    SettingRow(Ico.Zap, "وقت الشحن فقط", "ما يحمّلش إلا والموبايل على الشاحن", onClick = { Prefs.chargingOnly = !Prefs.chargingOnly; Prefs.save() }) {
+                        Toggle(Prefs.chargingOnly) { Prefs.chargingOnly = it; Prefs.save() }
+                    }
+                }
+                item { Footnote("لبدء ملف فورًا اضغط ▶ جنبه. لو النظام قفل الخدمة، التحميلات المنتظرة بتكمّل لما تفتح التطبيق.") }
             }
-        }
-        if (sites.isEmpty()) item {
-            SettingRow(Ico.Cookie, "مفيش مواقع مسجّلة", "افتح المتصفح الصغير وسجّل دخول في الموقع اللي عايزه")
-        } else {
-            item { SettingRow(Ico.Lock, "مواقع مسجّل دخولها", "${sites.size} موقع", subColor = cs.tertiary) }
-            items(sites.toList(), key = { "ck" + it.domain }) { site ->
-                SettingRow(Ico.Cookie, site.domain, "${site.count} كوكي") {
-                    IconButton({ Repo.deleteCookies(site.domain); ckMsg = "" }) { Icon(Ico.Delete, "حذف", tint = cs.error) }
+
+            3 -> {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Switcher(listOf("تلقائي", "فاتح", "داكن"), Prefs.theme) { Prefs.theme = it; Prefs.save() }
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            for (a in 0..5) {
+                                val c = if (a == 0) cs.surfaceContainerHighest else AccentDots[a - 1]
+                                Box(Modifier.size(46.dp).clip(CircleShape).background(c)
+                                    .then(if (Prefs.accent == a) Modifier.border(3.dp, cs.onSurface, CircleShape) else Modifier)
+                                    .clickable { Prefs.accent = a; Prefs.save() }, contentAlignment = Alignment.Center) {
+                                    if (a == 0) Text("A", style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
+                                    else if (Prefs.accent == a) Icon(Ico.Check, null, tint = Color.White)
+                                }
+                            }
+                        }
+                        Footnote("«A» = ألوان خلفية الموبايل (أندرويد 12 وأحدث).")
+                    }
                 }
             }
-        }
-        item {
-            Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (ckMsg.isNotEmpty()) Text(ckMsg, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilledTonalButton({ picker.launch(arrayOf("*/*")) }) { Text("استيراد cookies.txt") }
-                    if (hasCk) TextButton({ Repo.clearCookies(); ckMsg = "" }) { Text("حذف الكل", color = cs.error) }
-                }
-                Footnote("الكوكيز بتتطبّق تلقائيًا على كل موقع بتحمّل منه. لو جوجل منعت تسجيل الدخول جوه المتصفح الصغير، صدّر cookies.txt من متصفحك (إضافة Get cookies.txt LOCALLY) واستورده هنا. يفضّل تستخدم حساب ثانوي.")
-            }
-        }
 
-        item { SectionTitle("عن التطبيق") }
-        item {
-            SettingRow(Ico.Info, "طريقة الاستخدام", "اعرض شرح الخطوات تاني",
-                onClick = { howDialog = true }) {
-                FilledTonalButton({ howDialog = true }) { Text("عرض") }
+            4 -> {
+                item {
+                    SettingRow(Ico.Globe, "المتصفح الصغير", "سجّل دخول في أي موقع (يوتيوب، فيسبوك، إنستجرام…) والكوكيز بتتحفظ لـ Grab",
+                        onClick = { ctx.startActivity(Intent(ctx, LoginActivity::class.java)) }) {
+                        FilledTonalButton({ ctx.startActivity(Intent(ctx, LoginActivity::class.java)) }) { Text("فتح") }
+                    }
+                }
+                if (sites.isEmpty()) item {
+                    SettingRow(Ico.Cookie, "مفيش مواقع مسجّلة", "افتح المتصفح الصغير وسجّل دخول في الموقع اللي عايزه")
+                } else {
+                    item { SettingRow(Ico.Lock, "مواقع مسجّل دخولها", "${sites.size} موقع", subColor = cs.tertiary) }
+                    items(sites.toList(), key = { "ck" + it.domain }) { site ->
+                        SettingRow(Ico.Cookie, site.domain, "${site.count} كوكي") {
+                            IconButton({ Repo.deleteCookies(site.domain); ckMsg = "" }) { Icon(Ico.Delete, "حذف", tint = cs.error) }
+                        }
+                    }
+                }
+                item {
+                    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (ckMsg.isNotEmpty()) Text(ckMsg, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FilledTonalButton({ picker.launch(arrayOf("*/*")) }) { Text("استيراد cookies.txt") }
+                            if (hasCk) TextButton({ Repo.clearCookies(); ckMsg = "" }) { Text("حذف الكل", color = cs.error) }
+                        }
+                        Footnote("الكوكيز بتتطبّق تلقائيًا على كل موقع بتحمّل منه. لو جوجل منعت تسجيل الدخول جوه المتصفح الصغير، صدّر cookies.txt من متصفحك (إضافة Get cookies.txt LOCALLY) واستورده هنا. يفضّل تستخدم حساب ثانوي.")
+                    }
+                }
             }
+
+            5 -> {
+                item {
+                    SettingRow(IcEngine, "yt-dlp", if (st.isNotEmpty()) st else if (ver.isNotEmpty()) "الإصدار $ver" else "—") {
+                        Box(Modifier.clip(CircleShape).background(cs.primaryContainer).clickable { Repo.update() }
+                            .padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Ico.Refresh, null, Modifier.size(18.dp), tint = cs.onPrimaryContainer)
+                                Text("تحديث", color = cs.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    }
+                }
+                item { Footnote("بيتحدّث تلقائيًا كل 12 ساعة، وكمان لو التحميل فشل. لو يوتيوب رفض التحميل جرّب التحديث بإيدك.") }
+            }
+
+            6 -> {
+                item {
+                    SettingRow(Ico.Info, "طريقة الاستخدام", "اعرض شرح الخطوات تاني", onClick = { howDialog = true }) {
+                        FilledTonalButton({ howDialog = true }) { Text("عرض") }
+                    }
+                }
+                item { SettingRow(Ico.Download, "Grab", if (appVer.isNotEmpty()) "الإصدار $appVer" else "تحميل الفيديو والصوت والصور") }
+            }
+
+            else -> {}
         }
     }
 
@@ -1447,6 +1672,17 @@ object Ico {
     val Globe by lazy { icon("globe",
         "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", "M2 12h20") }
     val ArrowRight by lazy { icon("arrow-right", "M5 12h14", "M12 5l7 7-7 7") }
+    val ArrowLeft by lazy { icon("arrow-left", "M19 12H5", "M12 19l-7-7 7-7") }
+    val ChevronL by lazy { icon("chevron-left", "M15 18l-6-6 6-6") }
+    val ChevronR by lazy { icon("chevron-right", "M9 18l6-6-6-6") }
+    val ChevronDown by lazy { icon("chevron-down", "M6 9l6 6 6-6") }
+    val ChevronUp by lazy { icon("chevron-up", "M18 15l-6-6-6 6") }
+    val Image by lazy { icon("image",
+        "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
+        "M9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M21 15l-3.09-3.09a2 2 0 0 0-2.82 0L6 21") }
+    val Sun by lazy { icon("sun",
+        "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M12 2v2", "M12 20v2", "M4.93 4.93l1.41 1.41", "M17.66 17.66l1.41 1.41",
+        "M2 12h2", "M20 12h2", "M6.34 17.66l-1.41 1.41", "M19.07 4.93l-1.41 1.41") }
     val Scissors by lazy { icon("scissors",
         "M9 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z", "M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
         "M20 4L8.12 15.88", "M14.47 14.48L20 20", "M8.12 8.12L12 12") }
