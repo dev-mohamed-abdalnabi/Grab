@@ -1,4 +1,6 @@
--keep class com.yausername.** { *; }
+-keep class com.yausername.youtubedl_android.YoutubeDL { *; }
+-keep class com.yausername.youtubedl_android.YoutubeDLRequest { *; }
+-keep class com.yausername.ffmpeg.FFmpeg { *; }
 -keep class com.fasterxml.jackson.databind.** { *; }
 -keep class com.fasterxml.jackson.annotation.** { *; }
 -keep class com.fasterxml.jackson.core.** { *; }
