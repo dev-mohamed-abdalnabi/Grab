@@ -1138,7 +1138,12 @@ private fun QChip(top: String, sub: String, size: String, sel: Boolean, onClick:
 private fun TaskStats(t: Task) {
     val cs = MaterialTheme.colorScheme
     val left = (t.total - t.done).coerceAtLeast(0L)
-    val line1 = "${sz(t.done, false)} من ${sz(t.total, false)}"
+    val line1 = when {
+        t.done > 0L && t.total > 0L -> "${sz(t.done, false)} من ${sz(t.total, false)}"
+        t.done > 0L -> "تم تنزيل ${sz(t.done, false)}"
+        t.total > 0L -> "الحجم الإجمالي ${sz(t.total, false)}"
+        else -> "الحجم بيتحدد أثناء التحميل"
+    }
     val line2 = listOfNotNull(
         if (t.speed > 0L) sz(t.speed, false) + "/s" else null,
         if (left > 0L) "المتبقي ${sz(left, false)}" else null,
@@ -1186,13 +1191,16 @@ fun TaskRow(t: Task, modifier: Modifier = Modifier) {
                     FilledTonalIconButton({ Repo.cancel(t) }) { Icon(Ico.Close, "إلغاء") }
                 }
                 St.Failed, St.Canceled -> Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    FilledTonalIconButton({ if (t.waitNet) Repo.startNow(ctx, t) else Repo.enqueue(ctx, t) }) { Icon(Ico.Refresh, "إعادة") }
+                    FilledTonalIconButton({ if (t.waitNet || t.keep) Repo.startNow(ctx, t) else Repo.enqueue(ctx, t) }) {
+                        Icon(if (t.waitNet || t.keep) Ico.Play else Ico.Refresh,
+                            if (t.waitNet || t.keep) "استئناف" else "إعادة")
+                    }
                     IconButton({ Repo.drop(t) }) { Icon(Ico.Delete, "حذف") }
                 }
                 else -> {}
             }
         }
-        if (t.st == St.Running && t.done > 0L && t.total > 0L) TaskStats(t)
+        if (t.done > 0L || t.total > 0L || t.st == St.Canceled) TaskStats(t)
     }
 }
 

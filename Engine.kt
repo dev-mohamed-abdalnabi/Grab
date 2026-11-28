@@ -515,11 +515,15 @@ object Repo {
     // auto = استئناف تلقائي (من الخدمة أو عند فتح التطبيق) مش ضغطة من المستخدم
     fun enqueue(c: Context, t: Task, auto: Boolean = false) {
         if (t.job?.isActive == true) return          // شغّال أصلًا، ما نكرّرش
+        val resumeStats = t.keep && (t.done > 0L || t.total > 0L)
         if (!auto) t.autoTries = 0
         if (t !in tasks) tasks.add(0, t)
         t.waitNet = false; t.lastTry = System.currentTimeMillis(); t.queuedAt = t.lastTry
-        t.st = St.Queued; t.progress = 0f; t.msg = ""
-        t.speed = 0L; t.done = 0L; t.total = 0L; t.eta = 0L
+        t.st = St.Queued; t.msg = ""
+        // الاستئناف الحقيقي يحتفظ بما تم تنزيله، أما المهمة الجديدة فتبدأ بإحصاءات نظيفة.
+        if (!resumeStats) {
+            t.progress = 0f; t.speed = 0L; t.done = 0L; t.total = 0L; t.eta = 0L
+        }
         saveTasks()
         if (!auto || !DownloadService.looping)
             try { c.startForegroundService(Intent(c, DownloadService::class.java)) } catch (_: Throwable) {}
@@ -813,7 +817,7 @@ object Repo {
         }
 
         // التقدّم: بنحسب اللي نزل والباقي والسرعة. الفيديو والصوت بيتحمّلوا كملفين، فلما النسبة ترجع للصفر نعدّ الملف اللي فات
-        var base = 0L; var prevP = 0f; var prevTot = 0L
+        var base = 0L; var prevP = 0f; var prevTot = 0L; var lastPersist = 0L
         YoutubeDL.getInstance().execute(r, t.id, callback = { p, eta, line ->
             if (p >= 0f) {
                 var cur = prevTot; var sp = 0L
@@ -833,6 +837,9 @@ object Repo {
                 val left = tot - got
                 t.eta = if (t.speed > 0L && left > 0L) left / t.speed else eta
                 if (p >= 99.5f && (!overall || t.progress >= 0.97f)) t.msg = "جاري الدمج والحفظ…"
+                // لا ننتظر نهاية المهمة لحفظ الإحصاءات؛ هذا يحافظ على آخر حالة قابلة للاستئناف.
+                val now = System.currentTimeMillis()
+                if (now - lastPersist >= 1_000L) { lastPersist = now; saveTasks() }
             }
         })
     }
@@ -1070,9 +1077,13 @@ object Repo {
                 val saved = try { St.valueOf(o.getString("st")) } catch (_: Throwable) { St.Failed }
                 if (saved == St.Canceled || saved == St.Failed) {
                     t.st = saved; t.msg = o.optString("m")
+                    t.progress = o.optDouble("pr", 0.0).toFloat().coerceIn(0f, 1f)
+                    t.speed = o.optLong("sp"); t.done = o.optLong("dn"); t.total = o.optLong("tt"); t.eta = o.optLong("eta")
                     if (o.optBoolean("wn")) { t.waitNet = true; t.waitKind = o.optInt("wk"); t.waitSince = System.currentTimeMillis(); t.keep = true }
-                } else {   // كان شغّال لما التطبيق اتقفل: هيكمّل لوحده أول ما التطبيق يفتح والنت موجود
+                } else {   // كان شغّال لما التطبيق اتقفل: هيكمّل تلقائيًا أول ما التطبيق يفتح والنت موجود
                     t.st = St.Failed; t.msg = "اتوقف لما التطبيق اتقفل — هكمّل تلقائيًا"
+                    t.progress = o.optDouble("pr", 0.0).toFloat().coerceIn(0f, 1f)
+                    t.speed = o.optLong("sp"); t.done = o.optLong("dn"); t.total = o.optLong("tt"); t.eta = o.optLong("eta")
                     t.waitNet = true; t.waitSince = System.currentTimeMillis()
                 }
                 tasks.add(t)
@@ -1086,6 +1097,7 @@ object Repo {
                 a.put(JSONObject().put("id", t.id).put("url", t.url).put("t", t.title).put("th", t.thumb ?: "")
                     .put("a", t.audio).put("h", t.height).put("s", t.subs).put("p", t.playlist)
                     .put("st", t.st.name).put("m", t.msg).put("wn", t.waitNet).put("wk", t.waitKind)
+                    .put("pr", t.progress).put("sp", t.speed).put("dn", t.done).put("tt", t.total).put("eta", t.eta)
                     .put("u", t.uploader ?: "").put("cs", t.clipStart).put("ce", t.clipEnd)
                     .put("to", t.thumbOnly).put("ex", t.expect))
             }
